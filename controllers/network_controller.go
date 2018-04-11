@@ -2,12 +2,12 @@ package controllers
 
 import (
 	"fmt"
-	"pannetrat.com/nocand/clog"
-	"pannetrat.com/nocand/models"
-	"pannetrat.com/nocand/models/can"
-	"pannetrat.com/nocand/models/nocan"
-	"pannetrat.com/nocand/models/rpi"
-	"pannetrat.com/nocand/socket"
+	"github.com/omzlo/nocand/clog"
+	"github.com/omzlo/nocand/models"
+	"github.com/omzlo/nocand/models/can"
+	"github.com/omzlo/nocand/models/nocan"
+	"github.com/omzlo/nocand/models/rpi"
+	"github.com/omzlo/nocand/socket"
 	"strconv"
 	"time"
 )

@@ -3,8 +3,8 @@ package socket
 import (
 	"errors"
 	"fmt"
-	"pannetrat.com/nocand/models"
-	"pannetrat.com/nocand/models/nocan"
+	"github.com/omzlo/nocand/models"
+	"github.com/omzlo/nocand/models/nocan"
 )
 
 var ErrorMissingData error = errors.New("Missing data for value decoder")
@@ -105,12 +105,12 @@ const (
 //
 
 type ChannelUpdateRequest struct {
-    Id nocan.ChannelId
-    Name string
+	Id   nocan.ChannelId
+	Name string
 }
 
 func NewChannelUpdateRequest(chan_name string, chan_id nocan.ChannelId) *ChannelUpdateRequest {
-    return &ChannelUpdateRequest{chan_id, chan_name}
+	return &ChannelUpdateRequest{chan_id, chan_name}
 }
 
 func (cu *ChannelUpdateRequest) PackedLength() int {
@@ -118,38 +118,37 @@ func (cu *ChannelUpdateRequest) PackedLength() int {
 }
 
 func (cu *ChannelUpdateRequest) PackValue() ([]byte, error) {
-    buf := make([]byte, 0, cu.PackedLength())
-    buf = append(buf, byte(cu.Id>>8), byte(cu.Id&0xFF))
-    buf = append(buf, byte(len(cu.Name)))
+	buf := make([]byte, 0, cu.PackedLength())
+	buf = append(buf, byte(cu.Id>>8), byte(cu.Id&0xFF))
+	buf = append(buf, byte(len(cu.Name)))
 	buf = append(buf, []byte(cu.Name)...)
-    return buf, nil
+	return buf, nil
 }
 
 func (cu *ChannelUpdateRequest) UnpackValue(value []byte) error {
-    if len(value) < 3 {
+	if len(value) < 3 {
 		return ErrorMissingData
 	}
-    cu.Id = (nocan.ChannelId(value[0])<<8) | nocan.ChannelId(value[1])
+	cu.Id = (nocan.ChannelId(value[0]) << 8) | nocan.ChannelId(value[1])
 
-    lName := int(value[2])
+	lName := int(value[2])
 	if lName > 64 {
 		return errors.New("Channel name exceeds 64 bytes")
 	}
-    value = value[3:]
+	value = value[3:]
 	if lName > len(value) {
 		return ErrorMissingData
 	}
 	cu.Name = string(value[:lName])
-    return nil
+	return nil
 }
 
 func (cu ChannelUpdateRequest) String() string {
-    if cu.Name=="" {
-        return fmt.Sprintf("#%d", cu.Id)
-    }
-    return fmt.Sprintf("%s", cu.Name)
+	if cu.Name == "" {
+		return fmt.Sprintf("#%d", cu.Id)
+	}
+	return fmt.Sprintf("%s", cu.Name)
 }
-
 
 /****************************************************************************/
 
@@ -162,11 +161,11 @@ const (
 	CHANNEL_CREATED ChannelStatus = iota
 	CHANNEL_UPDATED
 	CHANNEL_DESTROYED
-    CHANNEL_NOT_FOUND
+	CHANNEL_NOT_FOUND
 )
 
 type ChannelUpdate struct {
-    Id     nocan.ChannelId
+	Id     nocan.ChannelId
 	Name   string
 	Status ChannelStatus
 	Value  []byte
@@ -180,8 +179,8 @@ func NewChannelUpdate(chan_name string, chan_id nocan.ChannelId, status ChannelS
 		copy(v, value)
 	} else {
 		v = nil
-    }
-    return &ChannelUpdate{chan_id, chan_name, status, v}
+	}
+	return &ChannelUpdate{chan_id, chan_name, status, v}
 }
 
 func (cu *ChannelUpdate) PackedLength() int {
@@ -191,7 +190,7 @@ func (cu *ChannelUpdate) PackedLength() int {
 func (cu *ChannelUpdate) PackValue() ([]byte, error) {
 	buf := make([]byte, 0, cu.PackedLength())
 	buf = append(buf, byte(cu.Status))
-    buf = append(buf, byte(cu.Id>>8), byte(cu.Id&0xFF))
+	buf = append(buf, byte(cu.Id>>8), byte(cu.Id&0xFF))
 	buf = append(buf, byte(len(cu.Name)))
 	buf = append(buf, []byte(cu.Name)...)
 	buf = append(buf, byte(len(cu.Value)))
@@ -207,7 +206,7 @@ func (cu *ChannelUpdate) UnpackValue(value []byte) error {
 	}
 	cu.Status = ChannelStatus(value[0])
 
-    cu.Id = (nocan.ChannelId(value[1])<<8) | nocan.ChannelId(value[2])
+	cu.Id = (nocan.ChannelId(value[1]) << 8) | nocan.ChannelId(value[2])
 
 	lName := int(value[3])
 	if lName == 0 {
@@ -242,8 +241,8 @@ func (cu ChannelUpdate) String() string {
 		return fmt.Sprintf("DESTROYED\t#%d\t%s", cu.Id, cu.Name)
 	case CHANNEL_UPDATED:
 		return fmt.Sprintf("UPDATED\t#%d\t%s\t%q", cu.Id, cu.Name, cu.Value)
-    case CHANNEL_NOT_FOUND:
-        return fmt.Sprintf("NOT_FOUND\t#%d\t%s", cu.Id, cu.Name)
+	case CHANNEL_NOT_FOUND:
+		return fmt.Sprintf("NOT_FOUND\t#%d\t%s", cu.Id, cu.Name)
 	}
 	return "ERROR"
 }
@@ -252,8 +251,7 @@ func (cu ChannelUpdate) String() string {
 //
 //
 
-        /* Channel list request is an empty event */
-
+/* Channel list request is an empty event */
 
 // ChannelList
 //
@@ -320,17 +318,17 @@ func (cl ChannelList) String() string {
 type NodeUpdateRequest nocan.NodeId
 
 func (nu *NodeUpdateRequest) PackValue() ([]byte, error) {
-    b := make([]byte, 1)
-    b[0] =  byte(*nu)
-    return b, nil
+	b := make([]byte, 1)
+	b[0] = byte(*nu)
+	return b, nil
 }
 
 func (nu *NodeUpdateRequest) UnpackValue(b []byte) error {
-    if len(b)<1 {
-        return ErrorMissingData
-    }
-    *nu = NodeUpdateRequest(b[0])
-    return nil
+	if len(b) < 1 {
+		return ErrorMissingData
+	}
+	*nu = NodeUpdateRequest(b[0])
+	return nil
 }
 
 func (nu NodeUpdateRequest) String() string {
@@ -638,11 +636,11 @@ const (
 	ServerHelloEvent                         = 5
 	BusPowerStatusUpdateEvent                = 6
 	BusPowerEvent                            = 7
-    ChannelUpdateRequestEvent                = 8
+	ChannelUpdateRequestEvent                = 8
 	ChannelUpdateEvent                       = 9
 	ChannelListRequestEvent                  = 10
 	ChannelListEvent                         = 11
-    NodeUpdateRequestEvent                   = 12
+	NodeUpdateRequestEvent                   = 12
 	NodeUpdateEvent                          = 13
 	NodeListRequestEvent                     = 14
 	NodeListEvent                            = 15

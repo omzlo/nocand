@@ -8,9 +8,9 @@ package rpi
 import "C"
 import "fmt"
 import "encoding/hex"
-import "pannetrat.com/nocand/clog"
-import "pannetrat.com/nocand/models/can"
-import "pannetrat.com/nocand/models/device"
+import "github.com/omzlo/nocand/clog"
+import "github.com/omzlo/nocand/models/can"
+import "github.com/omzlo/nocand/models/device"
 import "sync"
 import "time"
 

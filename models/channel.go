@@ -2,7 +2,7 @@ package models
 
 import (
 	"errors"
-	"pannetrat.com/nocand/models/nocan"
+	"github.com/omzlo/nocand/models/nocan"
 	"sync"
 	"time"
 )

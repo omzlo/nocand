@@ -2,10 +2,10 @@ package controllers
 
 import (
 	"fmt"
+	"github.com/omzlo/nocand/models"
+	"github.com/omzlo/nocand/models/nocan"
+	"github.com/omzlo/nocand/socket"
 	"hash/crc32"
-	"pannetrat.com/nocand/models"
-	"pannetrat.com/nocand/models/nocan"
-	"pannetrat.com/nocand/socket"
 )
 
 const (

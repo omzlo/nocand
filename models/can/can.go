@@ -2,7 +2,6 @@ package can
 
 import (
 	"fmt"
-	//"pannetrat.com/nocand/events"
 )
 
 type Frame struct {

@@ -1,9 +1,9 @@
 package controllers
 
 import (
-	"pannetrat.com/nocand/clog"
-	"pannetrat.com/nocand/models/rpi"
-	"pannetrat.com/nocand/socket"
+	"github.com/omzlo/nocand/clog"
+	"github.com/omzlo/nocand/models/rpi"
+	"github.com/omzlo/nocand/socket"
 	"time"
 )
 

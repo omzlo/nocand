@@ -2,9 +2,9 @@ package socket
 
 import (
 	"fmt"
+	"github.com/omzlo/nocand/clog"
 	"io"
 	"net"
-	"pannetrat.com/nocand/clog"
 	"sync"
 )
 

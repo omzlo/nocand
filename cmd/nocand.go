@@ -2,8 +2,8 @@ package main
 
 import (
 	"flag"
-	"pannetrat.com/nocand/clog"
-	"pannetrat.com/nocand/controllers"
+	"github.com/omzlo/nocand/clog"
+	"github.com/omzlo/nocand/controllers"
 	"time"
 )
 

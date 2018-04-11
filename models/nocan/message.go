@@ -3,9 +3,6 @@ package nocan
 import (
 	"encoding/hex"
 	"fmt"
-	//"pannetrat.com/nocand/clog"
-	//"pannetrat.com/nocand/models/can"
-	//"pannetrat.com/nocand/models/rpi"
 	"time"
 )
 

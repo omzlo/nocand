@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"pannetrat.com/nocand/models/nocan"
+	"github.com/omzlo/nocand/models/nocan"
 	"sync"
 	"time"
 )
@@ -16,7 +16,7 @@ import (
 //
 type Udid8 [8]byte
 
-var NullUdid8 = Udid8{0,0,0,0,0,0,0,0}
+var NullUdid8 = Udid8{0, 0, 0, 0, 0, 0, 0, 0}
 
 func CreateUdid8(b []byte) Udid8 {
 	var udid Udid8
