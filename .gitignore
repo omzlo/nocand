@@ -1,0 +1,7 @@
+.*.swp
+cmd/nocand
+cmd/nocand.log
+*.dat
+.DS_Store
+*.hex
+*.o
