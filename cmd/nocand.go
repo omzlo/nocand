@@ -14,6 +14,7 @@ var (
 	optLogLevel                int
 	optTest                    bool
 	optPowerOn                 bool
+	optCurrentLimit            uint
 )
 
 func init() {
@@ -23,6 +24,7 @@ func init() {
 	flag.IntVar(&optPowerMonitoringInterval, "power-monitoring-interval", 10, "CANbus power monitoring interval in seconds (default: 10, disable with 0).")
 	flag.IntVar(&optSpiSpeed, "spi-speed", 250000, "SPI communication speed in bits per second (use with caution).")
 	flag.IntVar(&optLogLevel, "log-level", int(clog.DEBUGXX), "Log level (0=all, 1=debug and more, 2=info and more, 3=warnings and errors, 4=errors only, 5=nothing)")
+	flag.UintVar(&optCurrentLimit, "current-limit", 0, "Current limit level (default=0 -> don't change)")
 }
 
 func main() {
@@ -46,6 +48,10 @@ func main() {
 	}
 
 	controllers.Bus.SetPower(optPowerOn)
+
+	if optCurrentLimit > 0 {
+		controllers.Bus.SetCurrentLimit(uint16(optCurrentLimit))
+	}
 
 	controllers.Bus.RunPowerMonitor(time.Duration(optPowerMonitoringInterval) * time.Second)
 

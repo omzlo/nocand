@@ -25,17 +25,18 @@ const (
 )
 
 const (
-	SPI_OP_NULL        = 0
-	SPI_OP_RESET       = 1
-	SPI_OP_DEVICE_INFO = 2
-	SPI_OP_POWER_LEVEL = 3
-	SPI_OP_SET_POWER   = 4
-	SPI_OP_SET_CAN_RES = 5
-	SPI_OP_STATUS      = 6
-	SPI_OP_STORE_DATA  = 7
-	SPI_OP_SEND_REQ    = 8
-	SPI_OP_FETCH_DATA  = 9
-	SPI_OP_RECV_ACK    = 10
+	SPI_OP_NULL              = 0
+	SPI_OP_RESET             = 1
+	SPI_OP_DEVICE_INFO       = 2
+	SPI_OP_POWER_LEVEL       = 3
+	SPI_OP_SET_POWER         = 4
+	SPI_OP_SET_CAN_RES       = 5
+	SPI_OP_STATUS            = 6
+	SPI_OP_STORE_DATA        = 7
+	SPI_OP_SEND_REQ          = 8
+	SPI_OP_FETCH_DATA        = 9
+	SPI_OP_RECV_ACK          = 10
+	SPI_OP_SET_CURRENT_LIMIT = 11
 )
 
 var spi_op_names = [...]string{
@@ -50,6 +51,7 @@ var spi_op_names = [...]string{
 	"SPI_OP_SEND_REQ",
 	"SPI_OP_FETCH_DATA",
 	"SPI_OP_RECV_ACK",
+	"SPI_OP_SET_CURRENT_LIMIT",
 }
 
 const (
@@ -174,7 +176,7 @@ func DriverUpdatePowerStatus() (*device.PowerStatus, error) {
 }
 
 func DriverSetPower(powered bool) error {
-	var buf [4]byte
+	var buf [2]byte
 	buf[0] = SPI_OP_SET_POWER
 
 	if powered {
@@ -182,6 +184,15 @@ func DriverSetPower(powered bool) error {
 	} else {
 		buf[1] = 0
 	}
+	return SPITransfer(buf[:])
+}
+
+func DriverSetCurrentLimit(limit uint16) error {
+	var buf [3]byte
+	buf[0] = SPI_OP_SET_CURRENT_LIMIT
+	buf[1] = byte(limit >> 8)
+	buf[2] = byte(limit & 0xFF)
+
 	return SPITransfer(buf[:])
 }
 
