@@ -98,10 +98,12 @@ func (nc *NocanNetworkController) SendSystemMessage(nodeId nocan.NodeId, fn noca
 	return nc.SendMessage(msg)
 }
 
+/*
 func (nc *NocanNetworkController) SendPublishMessage(nodeId nocan.NodeId, channel nocan.ChannelId, data []byte) error {
 	msg := nocan.NewPublishMessage(nodeId, channel, data)
 	return nc.SendMessage(msg)
 }
+*/
 
 func (nc *NocanNetworkController) Publish(node nocan.NodeId, channel nocan.ChannelId, data []byte) error {
 	msg := nocan.NewPublishMessage(node, channel, data)

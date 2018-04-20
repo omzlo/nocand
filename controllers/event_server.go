@@ -84,6 +84,7 @@ func clientChannelUpdateHandler(c *socket.Client, eid socket.EventId, value []by
 	if cu.Status == socket.CHANNEL_UPDATED {
 		channel.SetContent(cu.Value)
 		Bus.Publish(0, channel.Id, cu.Value)
+        EventServer.Broadcast(socket.ChannelUpdateEvent, socket.NewChannelUpdate(channel.Name, channel.Id, socket.CHANNEL_UPDATED, cu.Value))
 	}
 	if cu.Status == socket.CHANNEL_DESTROYED {
 		if !Channels.Unregister(channel) {
