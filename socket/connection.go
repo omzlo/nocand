@@ -56,7 +56,7 @@ func clientAuthHandler(c *Client, eid EventId, value []byte) error {
 	if err := auth.UnpackValue(value); err != nil {
 		return err
 	}
-	if auth == "password" {
+	if string(auth) == c.Server.AuthToken {
 		c.Authenticated = true
 		clog.Info("Client %s successfully authenticated", c)
 		return c.Put(ServerAckEvent, SERVER_SUCCESS)
@@ -88,11 +88,12 @@ func clientHelloHandler(c *Client, eid EventId, value []byte) error {
 type EventHandler func(*Client, EventId, []byte) error
 
 type Server struct {
-	Mutex    sync.Mutex
-	topId    uint
-	ls       net.Listener
-	clients  *Client
-	handlers map[EventId]EventHandler
+	Mutex     sync.Mutex
+	AuthToken string
+	topId     uint
+	ls        net.Listener
+	clients   *Client
+	handlers  map[EventId]EventHandler
 }
 
 func NewServer() *Server {
@@ -209,7 +210,7 @@ func (s *Server) runClient(c *Client) {
 	}
 }
 
-func (s *Server) ListenAndServe(addr string) error {
+func (s *Server) ListenAndServe(addr string, auth_token string) error {
 	ls, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
@@ -217,6 +218,7 @@ func (s *Server) ListenAndServe(addr string) error {
 	clog.Info("Listening for clients at %s", ls.Addr())
 	s.ls = ls
 
+	s.AuthToken = auth_token
 	for {
 		conn, err := s.ls.Accept()
 		if err != nil {

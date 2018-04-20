@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"github.com/omzlo/nocand/clog"
+	"github.com/omzlo/nocand/cmd/config"
 	"github.com/omzlo/nocand/controllers"
 	"time"
 )
@@ -30,10 +31,16 @@ func init() {
 func main() {
 	var start_driver bool
 
+	err_config := config.Load()
+
 	flag.Parse()
 
 	clog.SetLogFile("nocand.log")
 	clog.SetLogLevel(clog.LogLevel(optLogLevel))
+
+	if err_config != nil {
+		clog.Info("No configuration file was loaded (%s)", err_config)
+	}
 
 	//controllers.CreateUnpackerRegistry()
 
@@ -58,7 +65,7 @@ func main() {
 	if !optTest {
 		go controllers.Bus.Serve()
 
-		clog.Error("Sever failed: %s", controllers.EventServer.ListenAndServe(":4242"))
+		clog.Error("Sever failed: %s", controllers.EventServer.ListenAndServe(":4242", config.Settings.AuthToken))
 	} else {
 		clog.Info("Done.")
 	}
