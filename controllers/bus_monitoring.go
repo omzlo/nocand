@@ -35,7 +35,7 @@ func (nc *NocanNetworkController) RunPowerMonitor(interval time.Duration) {
 	}()
 }
 
-func (nc *NocanNetworkController) Initialize(with_reset bool, spi_speed int) error {
+func (nc *NocanNetworkController) Initialize(with_reset bool, spi_speed uint) error {
 	return rpi.DriverInitialize(with_reset, spi_speed)
 }
 

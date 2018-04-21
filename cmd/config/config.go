@@ -6,13 +6,23 @@ import (
 )
 
 type Configuration struct {
-	Bind      string
-	AuthToken string
+	Bind                    string
+	AuthToken               string
+	DriverReset             bool
+	PowerMonitoringInterval uint
+	SpiSpeed                uint
+	LogLevel                uint
+	CurrentLimit            uint
 }
 
 var Settings = Configuration{
-	Bind:      ":4242:",
-	AuthToken: "password",
+	Bind:                    ":4242:",
+	AuthToken:               "password",
+	DriverReset:             true,
+	PowerMonitoringInterval: 10,
+	SpiSpeed:                250000,
+	LogLevel:                0,
+	CurrentLimit:            0,
 }
 
 func Load() error {

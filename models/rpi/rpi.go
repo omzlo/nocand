@@ -308,7 +308,7 @@ func DriverCheckSignature() bool {
 	return (info.Signature[0] == 'C' && info.Signature[1] == 'A' && info.Signature[2] == 'N' && info.Signature[3] == '0')
 }
 
-func DriverInitialize(reset bool, speed int) error {
+func DriverInitialize(reset bool, speed uint) error {
 	DriverReady = false
 
 	C.setup_wiring_pi()
