@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+var NOCAND_VERSION string = "Undefined"
+
 var (
 	//optDriverReset             bool
 	//optPowerMonitoringInterval int
@@ -37,6 +39,7 @@ func main() {
 
 	clog.SetLogFile("nocand.log")
 	clog.SetLogLevel(clog.LogLevel(config.Settings.LogLevel))
+	clog.Info("nocand version %s", NOCAND_VERSION)
 
 	if err_config != nil {
 		clog.Info("No configuration file was loaded (%s)", err_config)
