@@ -100,14 +100,14 @@ func downloadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 	var i uint32
 	var data [8]byte
 
-	if op.Firmware.Limit > FLASH_APP_LENGTH {
+	if op.Firmware.Limit > FLASH_APP_LENGTH || op.Firmware.Limit == 0 {
 		memlength = FLASH_APP_LENGTH
 	} else {
 		memlength = op.Firmware.Limit
 	}
 	block := make([]byte, 0, memlength)
 
-	for i = 0; i < memlength/FLASH_PAGE_SIZE; i++ {
+	for i = 0; i < (memlength+FLASH_PAGE_SIZE-1)/FLASH_PAGE_SIZE; i++ {
 		address = FLASH_APP_ORIGIN + i*FLASH_PAGE_SIZE
 		uint32ToBytes(address, data[:])
 		Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_SET_ADDRESS, 'F', data[:4])

@@ -470,10 +470,10 @@ type NodeFirmware struct {
 	Code     []FirmwareBlock
 }
 
-const MAX_UINT32 = 1<<32 - 1
+//const MAX_UINT32 = (1 << 32) - 1
 
 func NewNodeFirmware(id nocan.NodeId, isDownload bool) *NodeFirmware {
-	return &NodeFirmware{Id: id, Download: isDownload, Limit: MAX_UINT32, Code: make([]FirmwareBlock, 0, 8)}
+	return &NodeFirmware{Id: id, Download: isDownload, Limit: 0, Code: make([]FirmwareBlock, 0, 8)}
 }
 
 func (nf *NodeFirmware) AppendBlock(offset uint32, data []byte) {
