@@ -13,16 +13,18 @@ type Configuration struct {
 	SpiSpeed                uint   `toml:"spi-speed"`
 	LogLevel                uint   `toml:"log-level"`
 	CurrentLimit            uint   `toml:"current-limit"`
+	LogFile                 string `toml:"log-file"`
 }
 
 var Settings = Configuration{
-	Bind:                    ":4242:",
+	Bind:                    ":4242",
 	AuthToken:               "password",
 	DriverReset:             true,
 	PowerMonitoringInterval: 10,
 	SpiSpeed:                250000,
 	LogLevel:                0,
 	CurrentLimit:            0,
+	LogFile:                 "nocand.log",
 }
 
 func Load() error {

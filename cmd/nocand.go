@@ -28,6 +28,7 @@ func init() {
 	flag.UintVar(&config.Settings.SpiSpeed, "spi-speed", config.Settings.SpiSpeed, "SPI communication speed in bits per second (use with caution).")
 	flag.UintVar(&config.Settings.LogLevel, "log-level", config.Settings.LogLevel, "Log level (0=all, 1=debug and more, 2=info and more, 3=warnings and errors, 4=errors only, 5=nothing)")
 	flag.UintVar(&config.Settings.CurrentLimit, "current-limit", config.Settings.CurrentLimit, "Current limit level (default=0 -> don't change)")
+	flag.StringVar(&config.Settings.LogFile, "log-file", config.Settings.LogFile, "Log file, if empty no log file is created.")
 }
 
 func main() {
@@ -37,7 +38,9 @@ func main() {
 
 	flag.Parse()
 
-	clog.SetLogFile("nocand.log")
+	if config.Settings.LogFile != "" {
+		clog.SetLogFile(config.Settings.LogFile)
+	}
 	clog.SetLogLevel(clog.LogLevel(config.Settings.LogLevel))
 	clog.Info("nocand version %s", NOCAND_VERSION)
 
@@ -45,7 +48,11 @@ func main() {
 		clog.Info("No configuration file was loaded (%s)", err_config)
 	}
 
-	//controllers.CreateUnpackerRegistry()
+	if !optTest {
+		if err := controllers.EventServer.ListenAndServe(config.Settings.Bind, config.Settings.AuthToken); err != nil {
+			clog.Fatal("Failed to launch server: %s", err)
+		}
+	}
 
 	if config.Settings.DriverReset {
 		start_driver = controllers.BUS_RESET
@@ -66,9 +73,7 @@ func main() {
 	controllers.Bus.RunPowerMonitor(time.Duration(config.Settings.PowerMonitoringInterval) * time.Second)
 
 	if !optTest {
-		go controllers.Bus.Serve()
-
-		clog.Error("Sever failed: %s", controllers.EventServer.ListenAndServe(":4242", config.Settings.AuthToken))
+		controllers.Bus.Serve()
 	} else {
 		clog.Info("Done.")
 	}
