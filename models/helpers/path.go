@@ -50,11 +50,10 @@ func LocateDotFile(fname string) (string, error) {
 		vpath = path.Clean(homedir + "/." + fname)
 	}
 
-	/*
-		_, err = os.Stat(vpath)
-		if err != nil {
-			return "", err
-		}
-	*/
+	_, err = os.Stat(vpath)
+	if err != nil {
+		return vpath, err
+	}
+
 	return vpath, nil
 }

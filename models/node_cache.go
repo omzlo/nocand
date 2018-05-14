@@ -26,7 +26,7 @@ func NodeCacheLoad() error {
 	var entries []JsonCacheEntry
 
 	cacheFile, err = helpers.LocateDotFile("nocand.cache")
-	if err != nil {
+	if err != nil && cacheFile == "" {
 		return nil
 	}
 
