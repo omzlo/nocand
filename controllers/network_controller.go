@@ -82,7 +82,7 @@ func (nc *NocanNetworkController) SendMessage(msg *nocan.Message) error {
 			frame.CanId |= nocan.NOCANID_MASK_LAST
 		}
 		copy(frame.Data[:], msg.Data[pos:pos+frame.Dlc])
-		if err := rpi.DriverSendCanFrame(&frame); err != nil {
+		if err := rpi.DriverSendCanFrame(frame); err != nil {
 			return err
 		}
 		pos += frame.Dlc

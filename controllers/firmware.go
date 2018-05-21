@@ -70,15 +70,13 @@ func checkDeviceSignature(node *models.Node, op *NodeFirmwareOperation) error {
 func uploadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 	var address uint32
 	var crc uint32
-	var data [8]byte
+	var data [64]byte
 	var total_uploaded uint32 = 0
 
-	/*
-		err := checkDeviceSignature(node, op)
-		if err != nil {
-			return fmt.Errorf("Failed to get device signature for node %s, %s", node, err)
-		}
-	*/
+	err := checkDeviceSignature(node, op)
+	if err != nil {
+		return fmt.Errorf("Failed to get device signature for node %s, %s", node, err)
+	}
 
 	uint32ToBytes(FLASH_APP_ORIGIN, data[:])
 	Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_SET_ADDRESS, 'F', data[:4])
@@ -105,7 +103,9 @@ func uploadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 			}
 
 			crc = 0
-			for page_pos := uint32(0); page_pos < FLASH_PAGE_SIZE && page_offset+page_pos < blocksize; page_pos += 8 {
+			// This loop will only run once and could be simplifed because FLASH_PAGE_SIZE==64 for the SAMD21G18
+			// But in the future we might have more complex cases.
+			for page_pos := uint32(0); (page_pos < FLASH_PAGE_SIZE) && (page_offset+page_pos < blocksize); page_pos += 64 {
 				rlen := copy(data[:], block.Data[page_offset+page_pos:])
 				crc = crc32.Update(crc, crc32.IEEETable, data[:rlen])
 				Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_WRITE, 0, data[:rlen])
@@ -113,7 +113,7 @@ func uploadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 					op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Failed())
 					return fmt.Errorf("SYS_BOOTLOADER_WRITE failed for node %d at address=0x%x, %s", node, address, err)
 				}
-				total_uploaded += 8
+				total_uploaded += uint32(rlen)
 			}
 			uint32ToBytes(crc, data[:])
 			Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_WRITE, 1, data[:4])
@@ -160,8 +160,8 @@ func downloadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 			return fmt.Errorf("NOCAN_SYS_BOOTLOADER_SET_ADDRESS failed for node %d at address=0x%x, %s", node.Id, address, err)
 		}
 
-		for pos := uint32(0); pos < FLASH_PAGE_SIZE; pos += 8 {
-			Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_READ, 8, nil)
+		for pos := uint32(0); pos < FLASH_PAGE_SIZE; pos += 64 {
+			Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_READ, 64, nil)
 			response, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_READ_ACK)
 			if err != nil {
 				op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Failed())
@@ -169,7 +169,7 @@ func downloadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 			}
 
 			block = append(block, response.Bytes()...)
-			address += 8
+			address += 64
 		}
 		if err := op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Update(socket.ProgressReport((address-FLASH_APP_ORIGIN)*100/memlength), address-FLASH_APP_ORIGIN)); err != nil {
 			return err
