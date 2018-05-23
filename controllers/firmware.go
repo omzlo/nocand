@@ -47,6 +47,10 @@ func uint32ToBytes(u uint32, d []byte) []byte {
 	return d[:4]
 }
 
+func bytesToUint32(d []byte) uint32 {
+	return (uint32(d[0]) << 24) | (uint32(d[1]) << 16) | (uint32(d[0]) << 8) | (uint32(d[0]))
+}
+
 func checkDeviceSignature(node *models.Node, op *NodeFirmwareOperation) error {
 	Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_GET_SIGNATURE, 0, nil)
 	response, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_GET_SIGNATURE_ACK)
@@ -117,9 +121,16 @@ func uploadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 			}
 			uint32ToBytes(crc, data[:])
 			Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_WRITE, 1, data[:4])
-			if _, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_WRITE_ACK); err != nil {
+
+			response, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_WRITE_ACK)
+			if err != nil {
 				op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Failed())
 				return fmt.Errorf("Final SYS_BOOTLOADER_WRITE failed for node %d at address=0x%x, %s", node, address, err)
+			}
+			if response.SystemParam() == 0xFF {
+				crc_r := bytesToUint32(response.Bytes())
+				op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Failed())
+				return fmt.Errorf("SYS_BOOTLOADER_WRITE failed for node %d at address=0x%x, CRC32 mismatch, expected=%x go %x", node, address, crc, crc_r)
 			}
 
 			// TODO: check return code in ACK
@@ -128,6 +139,8 @@ func uploadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 			}
 		}
 	}
+	Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_LEAVE, 0, nil)
+
 	op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Update(socket.ProgressReport(100), total_uploaded))
 	return op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Success())
 }
@@ -180,5 +193,6 @@ func downloadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 
 	op.Firmware.AppendBlock(FLASH_APP_ORIGIN, block)
 
+	Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_LEAVE, 0, nil)
 	return op.Client.Put(socket.NodeFirmwareDownloadEvent, op.Firmware)
 }

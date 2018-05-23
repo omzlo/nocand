@@ -130,6 +130,10 @@ func (m *Message) SystemFunctionParam() (MessageType, uint8) {
 	return MessageType((m.CanId >> 8) & 0xFF), uint8(m.CanId & 0xFF)
 }
 
+func (m *Message) SystemParam() uint8 {
+	return uint8(m.CanId & 0xFF)
+}
+
 func (m *Message) SetSystemFunctionParam(fn MessageType, pr uint8) *Message {
 	m.CanId &= ^uint32(0xFFFF)
 	m.CanId |= uint32(fn)<<8 | uint32(pr)

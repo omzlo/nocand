@@ -575,11 +575,7 @@ func NewFirmwareProgress(id nocan.NodeId) *NodeFirmwareProgress {
 }
 
 func (nfp *NodeFirmwareProgress) Update(progress ProgressReport, transferred uint32) *NodeFirmwareProgress {
-	nfp.Progress = progress
-	if progress <= 100 {
-		nfp.BytesTransferred = transferred
-	}
-	return nfp
+	return &NodeFirmwareProgress{Id: nfp.Id, Progress: progress, BytesTransferred: transferred}
 }
 
 func (nfp *NodeFirmwareProgress) Failed() *NodeFirmwareProgress {

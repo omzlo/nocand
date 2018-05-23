@@ -246,9 +246,13 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 				default:
 				}
 			} else {
-				// TODO: accelerate boot by sending bootloader exit request
+				// accelerate boot by sending bootloader exit request
+				nc.SendSystemMessage(msg.NodeId(), nocan.SYS_BOOTLOADER_LEAVE, 0, nil)
 			}
 			nc.nodeContexts[node.Id].pendingFirmwareOperation = nil
+
+		case nocan.SYS_BOOTLOADER_LEAVE_ACK:
+			// Do nothing
 
 		case nocan.SYS_CHANNEL_REGISTER:
 			channel_name := node.ExpandAttributes(msg.DataToString())
