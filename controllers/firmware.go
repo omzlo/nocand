@@ -58,7 +58,7 @@ func checkDeviceSignature(node *models.Node, op *NodeFirmwareOperation) error {
 		op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Failed())
 		return err
 	}
-	if response.Dlc != 4 {
+	if response.Dlc < 4 || response.Dlc > 8 {
 		op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Failed())
 		return fmt.Errorf("Unexpected length (%d bytes).", response.Dlc)
 	}
