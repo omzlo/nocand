@@ -243,6 +243,7 @@ func (s *Server) ListenAndServe(addr string, auth_token string) error {
 //
 type EventConn struct {
 	Conn net.Conn
+	Addr string
 }
 
 func Dial(addr string, auth string) (*EventConn, error) {
@@ -254,17 +255,17 @@ func Dial(addr string, auth string) (*EventConn, error) {
 		return nil, err
 	}
 
-	ec := &EventConn{Conn: conn}
+	ec := &EventConn{Conn: conn, Addr: addr}
 
 	if err := ec.Put(ClientHelloEvent, nil); err != nil {
 		return nil, err
 	}
 	eid, value, err := ec.Get()
 	if eid != ServerHelloEvent {
-		return nil, fmt.Errorf("Expected ServerHelloEvent (%d), got %d", ServerHelloEvent, eid)
+		return nil, fmt.Errorf("Expected ServerHelloEvent %d from server %s, got %d", ServerHelloEvent, addr, eid)
 	}
 	if len(value) != 4 || value[0] != 'E' || value[1] != 'M' || value[2] != 1 || value[3] != 0 {
-		return nil, fmt.Errorf("Unexpected response to ClientHelloEvent: %q", value)
+		return nil, fmt.Errorf("Unexpected response to ClientHelloEvent from server %s: %q", addr, value)
 	}
 
 	if err = ec.Put(ClientAuthEvent, []byte(auth)); err != nil {
@@ -291,14 +292,13 @@ func (conn *EventConn) GetAck() error {
 		return err
 	}
 	if eid != ServerAckEvent {
-		return fmt.Errorf("Expected Server Ack Event (%d), got (%d) instead", ServerAckEvent, eid)
+		return fmt.Errorf("Expected Ack event %d from server %s, got %d instead", ServerAckEvent, eid)
 	}
 	if len(val) != 1 {
-		return fmt.Errorf("Expected Server Ack Event value length == 1, got %d", len(val))
+		return fmt.Errorf("Expected Ack event value with length == 1 from server %s, got %d", conn.Addr, len(val))
 	}
-	ack := ServerAck(val[0])
-	if ack != SERVER_SUCCESS {
-		return fmt.Errorf("%s (server response code %d)", ack, ack)
+	if val[0] != SERVER_SUCCESS {
+		return fmt.Errorf("Request to event server %s failed, Ack code %d '%s'", conn.Addr, val[0], ServerAckToString(val[0]))
 	}
 	return nil
 }

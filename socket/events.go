@@ -90,43 +90,27 @@ func (a *Authenticator) UnpackValue(b []byte) error {
 //
 //
 
-type ServerAck byte
-
 const (
-	SERVER_SUCCESS ServerAck = iota
+	SERVER_SUCCESS byte = iota
 	SERVER_BAD_REQUEST
 	SERVER_UNAUTHORIZED
 	SERVER_NOT_FOUND
 	SERVER_GENERAL_FAILURE
 )
 
-func (sa ServerAck) PackValue() ([]byte, error) {
-	v := make([]byte, 1, 1)
-	v[0] = byte(sa)
-	return v, nil
-}
-
-func (sa *ServerAck) UnpackValue(b []byte) error {
-	if len(b) < 1 {
-		return ErrorMissingData
-	}
-	*sa = ServerAck(b[0])
-	return nil
-}
-
-var serverAckStrings = []string{
+var serverAckStrings = [5]string{
 	"Success",
 	"Bad request",
-	"Authentication failed",
+	"Unauthorized",
 	"Not found",
-	"General Failure",
+	"General failure",
 }
 
-func (sa ServerAck) String() string {
-	if sa >= 0 && sa <= SERVER_GENERAL_FAILURE {
+func ServerAckToString(sa byte) string {
+	if sa < 5 {
 		return serverAckStrings[sa]
 	}
-	return "Unknown!"
+	return "!UNKNOWN!"
 }
 
 /****************************************************************************/
