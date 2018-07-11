@@ -90,10 +90,8 @@ func (a *Authenticator) UnpackValue(b []byte) error {
 //
 //
 
-type ServerAck byte
-
 const (
-	SERVER_SUCCESS ServerAck = iota
+	SERVER_SUCCESS byte = iota
 	SERVER_BAD_REQUEST
 	SERVER_UNAUTHORIZED
 	SERVER_NOT_FOUND
