@@ -98,6 +98,21 @@ const (
 	SERVER_GENERAL_FAILURE
 )
 
+var serverAckStrings = [5]string{
+	"Success",
+	"Bad request",
+	"Unauthorized",
+	"Not found",
+	"General failure",
+}
+
+func ServerAckToString(sa byte) string {
+	if sa < 5 {
+		return serverAckStrings[sa]
+	}
+	return "!UNKNOWN!"
+}
+
 /****************************************************************************/
 
 // ChannelUpdateRequest
