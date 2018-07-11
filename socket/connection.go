@@ -215,19 +215,25 @@ func (s *Server) ListenAndServe(addr string, auth_token string) error {
 	if err != nil {
 		return err
 	}
+
 	clog.Info("Listening for clients at %s", ls.Addr())
 	s.ls = ls
 
 	s.AuthToken = auth_token
-	for {
-		conn, err := s.ls.Accept()
-		if err != nil {
-			return err
+
+	go func() {
+		for {
+			conn, err := s.ls.Accept()
+			if err != nil {
+				clog.Error("Server could not accept connection: %s", err)
+			} else {
+				client := s.NewClient(conn)
+				clog.Info("Created new client %s", client)
+				go s.runClient(client)
+			}
 		}
-		client := s.NewClient(conn)
-		clog.Info("Created new client %s", client)
-		go s.runClient(client)
-	}
+	}()
+	return nil
 }
 
 /****************************************************************************/

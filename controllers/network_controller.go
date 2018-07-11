@@ -82,7 +82,7 @@ func (nc *NocanNetworkController) SendMessage(msg *nocan.Message) error {
 			frame.CanId |= nocan.NOCANID_MASK_LAST
 		}
 		copy(frame.Data[:], msg.Data[pos:pos+frame.Dlc])
-		if err := rpi.DriverSendCanFrame(&frame); err != nil {
+		if err := rpi.DriverSendCanFrame(frame); err != nil {
 			return err
 		}
 		pos += frame.Dlc
@@ -115,6 +115,9 @@ func (nc *NocanNetworkController) Serve() error {
 	nc.nodeContexts[0].running = true
 	nc.nodeContexts[0].inputQueue = make(chan *nocan.Message, 16)
 	nc.nodeContexts[0].terminateSignal = make(chan bool)
+
+	models.NodeCacheLoad()
+
 	go nc.handleMasterNode()
 
 	for {
@@ -167,9 +170,9 @@ func (nc *NocanNetworkController) handleMasterNode() {
 			if err != nil {
 				clog.Warning("NOCAN_SYS_ADDRESS_REQUEST: Failed to register device %s, %s", udid, err)
 			} else {
-				clog.Info("Device %s has been regsitered as node N%d", udid, node.Id)
+				clog.Info("Device %s has been registered as node N%d", udid, node.Id)
 			}
-			models.NodeInfo.SetAttribute(udid, "ID", strconv.Itoa(int(node.Id)))
+			node.SetAttribute("ID", strconv.Itoa(int(node.Id)))
 
 			if nc.nodeContexts[node.Id].running {
 				// terminate existing goroutine
@@ -243,12 +246,16 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 				default:
 				}
 			} else {
-				// TODO: accelerate boot by sending bootloader exit request
+				// accelerate boot by sending bootloader exit request
+				nc.SendSystemMessage(msg.NodeId(), nocan.SYS_BOOTLOADER_LEAVE, 0, nil)
 			}
 			nc.nodeContexts[node.Id].pendingFirmwareOperation = nil
 
+		case nocan.SYS_BOOTLOADER_LEAVE_ACK:
+			// Do nothing
+
 		case nocan.SYS_CHANNEL_REGISTER:
-			channel_name := models.NodeInfo.ExpandAttributes(node.Udid, msg.DataToString())
+			channel_name := node.ExpandAttributes(msg.DataToString())
 			if channel_name != msg.DataToString() {
 				clog.Debug("Interpolated channel name %s to %s", msg.DataToString(), channel_name)
 			}
@@ -262,7 +269,7 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 			}
 
 		case nocan.SYS_CHANNEL_LOOKUP:
-			channel_name := models.NodeInfo.ExpandAttributes(node.Udid, msg.DataToString())
+			channel_name := node.ExpandAttributes(msg.DataToString())
 			if channel_name != msg.DataToString() {
 				clog.Debug("Interpolated channel name %s to %s", msg.DataToString(), channel_name)
 			}

@@ -67,7 +67,7 @@ func DecodeFrame(buf []byte) (*Frame, error) {
 	return frame, nil
 }
 
-func (frame *Frame) String() string {
+func (frame Frame) String() string {
 	dlc := frame.Dlc
 	s := "<"
 

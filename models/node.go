@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/omzlo/nocand/models/nocan"
+	"strings"
 	"sync"
 	"time"
 )
@@ -40,7 +41,7 @@ func (id Udid8) DecodeString(s string) error {
 	src := []byte(s)
 
 	if len(id) < 8 {
-		return errors.New("Insufficient space to store node uidAttr")
+		return errors.New("Insufficient space to store node uid")
 	}
 
 	for i := 0; i < len(s); i += 3 {
@@ -93,14 +94,15 @@ func (ns NodeState) String() string {
 //
 //
 type Node struct {
-	State    NodeState
-	Id       nocan.NodeId
-	Udid     Udid8
-	LastSeen time.Time
+	State      NodeState
+	Id         nocan.NodeId
+	Udid       Udid8
+	LastSeen   time.Time
+	Attributes map[string]string
 }
 
 func NewNode(id nocan.NodeId, udid Udid8) *Node {
-	return &Node{State: NodeStateUnknown, Udid: udid, Id: id}
+	return &Node{State: NodeStateUnknown, Udid: udid, Id: id, Attributes: make(map[string]string)}
 }
 
 func (n *Node) Touch() {
@@ -109,6 +111,33 @@ func (n *Node) Touch() {
 
 func (n *Node) String() string {
 	return fmt.Sprintf("N%d (%s)", n.Id, n.Udid)
+}
+
+func (n *Node) SetAttribute(attr string, value string) {
+	n.Attributes[attr] = value
+}
+
+func (n *Node) GetAttribute(attr string) string {
+	return n.Attributes[attr]
+}
+
+func (n *Node) ExpandAttributes(s string) string {
+	var result string
+	for {
+		idx := strings.Index(s, "$(")
+		if idx < 0 {
+			return result + s
+		}
+		result += s[:idx]
+		s = s[idx:]
+		idx = strings.Index(s, ")")
+		if idx < 0 {
+			return result + s
+		}
+		key := s[2:idx]
+		result += n.GetAttribute(key)
+		s = s[idx+1:]
+	}
 }
 
 // NodeCollection
@@ -156,6 +185,10 @@ func (nc *NodeCollection) Each(cb func(node *Node)) {
 }
 
 func (nc *NodeCollection) Register(udid Udid8) (*Node, error) {
+	if udid == NullUdid8 {
+		return nil, errors.New("Cannot register a node with a NULL udid")
+	}
+
 	if node := nc.Lookup(udid); node != nil {
 		//node.MessageQueue = make(chan *nocan.Message, 16)
 		node.State = NodeStateConnecting
@@ -165,18 +198,30 @@ func (nc *NodeCollection) Register(udid Udid8) (*Node, error) {
 	nc.Mutex.Lock()
 	defer nc.Mutex.Unlock()
 
-	for i := 1; i < 128; i++ {
-		if nc.Nodes[i] == nil {
-			//node := &Node{State: NodeStateUnknown, Udid: udid, MessageQueue: make(chan *nocan.Message, 16), Id: nocan.NodeId(i)}
-			node := NewNode(nocan.NodeId(i), udid)
-			nc.Nodes[i] = node
+	node_id := NodeCacheLookup(udid)
+	if node_id != 0 {
+		if nc.Nodes[node_id] == nil {
+			node := NewNode(node_id, udid)
+			nc.Nodes[node_id] = node
 			nc.Udids[udid] = node
 			node.Touch()
+			NodeCacheSetEntry(udid, node_id)
 			return node, nil
 		}
 	}
 
-	return nil, errors.New("Maximum number of nodes has been reached.")
+	for i := 1; i < 128; i++ {
+		if nc.Nodes[i] == nil && NodeCacheReverseLookup(nocan.NodeId(i)) == false {
+			node := NewNode(nocan.NodeId(i), udid)
+			nc.Nodes[i] = node
+			nc.Udids[udid] = node
+			node.Touch()
+			NodeCacheSetEntry(udid, node.Id)
+			return node, nil
+		}
+	}
+
+	return nil, errors.New("Maximum number of nodes has been reached, consider clearing the node cache.")
 }
 
 func (nc *NodeCollection) Unregister(node *Node) bool {

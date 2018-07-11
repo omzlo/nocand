@@ -52,7 +52,8 @@ func LocateDotFile(fname string) (string, error) {
 
 	_, err = os.Stat(vpath)
 	if err != nil {
-		return "", err
+		return vpath, err
 	}
+
 	return vpath, nil
 }

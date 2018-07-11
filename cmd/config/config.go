@@ -6,23 +6,25 @@ import (
 )
 
 type Configuration struct {
-	Bind                    string
-	AuthToken               string
-	DriverReset             bool
-	PowerMonitoringInterval uint
-	SpiSpeed                uint
-	LogLevel                uint
-	CurrentLimit            uint
+	Bind                    string `toml:"bind"`
+	AuthToken               string `toml:"auth-token"`
+	DriverReset             bool   `toml:"driver-reset"`
+	PowerMonitoringInterval uint   `toml:"power-monitoring-interval"`
+	SpiSpeed                uint   `toml:"spi-speed"`
+	LogLevel                uint   `toml:"log-level"`
+	CurrentLimit            uint   `toml:"current-limit"`
+	LogFile                 string `toml:"log-file"`
 }
 
 var Settings = Configuration{
-	Bind:                    ":4242:",
+	Bind:                    ":4242",
 	AuthToken:               "password",
 	DriverReset:             true,
 	PowerMonitoringInterval: 10,
 	SpiSpeed:                250000,
 	LogLevel:                0,
 	CurrentLimit:            0,
+	LogFile:                 "nocand.log",
 }
 
 func Load() error {

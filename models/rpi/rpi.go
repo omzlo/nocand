@@ -61,8 +61,8 @@ const (
 )
 
 var SPIMutex sync.Mutex
-var CanTxChannel chan (*can.Frame)
-var CanRxChannel chan (*can.Frame)
+var CanTxChannel chan (can.Frame)
+var CanRxChannel chan (can.Frame)
 var DriverReady = false
 var trCounter uint = 0
 
@@ -294,7 +294,7 @@ func driverSendCanFrame(frame *can.Frame) error {
 	return DriverSendReq()
 }
 
-func DriverSendCanFrame(frame *can.Frame) error {
+func DriverSendCanFrame(frame can.Frame) error {
 	CanTxChannel <- frame
 	return nil
 }
@@ -353,7 +353,7 @@ func CanRxInterrupt() {
 			break
 		}
 		clog.DebugXX("RECV FRAME %s", frame)
-		CanRxChannel <- frame
+		CanRxChannel <- *frame
 	}
 
 	//clog.DebugXX("Got interrupt on RX pin")
@@ -378,8 +378,8 @@ func RunPowerMonitor(interval time.Duration) {
 */
 
 func init() {
-	CanTxChannel = make(chan (*can.Frame), 32)
-	CanRxChannel = make(chan (*can.Frame), 32)
+	CanTxChannel = make(chan (can.Frame), 32)
+	CanRxChannel = make(chan (can.Frame), 32)
 
 	go func() {
 		for {
@@ -393,7 +393,7 @@ func init() {
 					clog.Warning("Microcontroller transmission has been blocking for more than %d seconds on frame %s.", int(time.Since(start).Seconds()), frame)
 				}
 			}
-			if err := driverSendCanFrame(frame); err != nil {
+			if err := driverSendCanFrame(&frame); err != nil {
 				clog.Error("Failed to send CAN frame - %s", err)
 			}
 			clog.DebugXX("SEND FRAME %s", frame)

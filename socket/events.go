@@ -90,8 +90,10 @@ func (a *Authenticator) UnpackValue(b []byte) error {
 //
 //
 
+type ServerAck byte
+
 const (
-	SERVER_SUCCESS byte = iota
+	SERVER_SUCCESS ServerAck = iota
 	SERVER_BAD_REQUEST
 	SERVER_UNAUTHORIZED
 	SERVER_NOT_FOUND
@@ -454,10 +456,10 @@ type NodeFirmware struct {
 	Code     []FirmwareBlock
 }
 
-const MAX_UINT32 = 1<<32 - 1
+//const MAX_UINT32 = (1 << 32) - 1
 
 func NewNodeFirmware(id nocan.NodeId, isDownload bool) *NodeFirmware {
-	return &NodeFirmware{Id: id, Download: isDownload, Limit: MAX_UINT32, Code: make([]FirmwareBlock, 0, 8)}
+	return &NodeFirmware{Id: id, Download: isDownload, Limit: 0, Code: make([]FirmwareBlock, 0, 8)}
 }
 
 func (nf *NodeFirmware) AppendBlock(offset uint32, data []byte) {
@@ -559,11 +561,7 @@ func NewFirmwareProgress(id nocan.NodeId) *NodeFirmwareProgress {
 }
 
 func (nfp *NodeFirmwareProgress) Update(progress ProgressReport, transferred uint32) *NodeFirmwareProgress {
-	nfp.Progress = progress
-	if progress <= 100 {
-		nfp.BytesTransferred = transferred
-	}
-	return nfp
+	return &NodeFirmwareProgress{Id: nfp.Id, Progress: progress, BytesTransferred: transferred}
 }
 
 func (nfp *NodeFirmwareProgress) Failed() *NodeFirmwareProgress {

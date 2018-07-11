@@ -51,17 +51,16 @@ var plain_tags = [...]string{
 }
 
 var filelog *log.Logger
+var logfile *os.File
 
 func SetLogLevel(level LogLevel) {
 	displayLogLevel = level
 }
 
 func SetLogFile(fname string) {
-	var logfile *os.File
-
 	logfile, err := os.Create(fname)
 	if err != nil {
-		panic("Cloud not open nocan.log: " + err.Error())
+		Fatal("Cloud not open log file, %s", err)
 	}
 	filelog = log.New(logfile, "", log.LstdFlags)
 	filelog.Println("**************** START *****************")
@@ -94,6 +93,17 @@ func processLogQueue() {
 	}
 }
 
+func Terminate() {
+	Log(INFO, "Terminating.")
+	for len(LogQueue) > 0 {
+	}
+	if filelog != nil {
+		filelog.Printf("**************** STOP *****************")
+		logfile.Close()
+	}
+	os.Exit(1)
+}
+
 func Warning(format string, v ...interface{}) {
 	Log(WARNING, format, v...)
 }
@@ -103,7 +113,7 @@ func Error(format string, v ...interface{}) {
 }
 func Fatal(format string, v ...interface{}) {
 	Log(ERROR, format, v...)
-	os.Exit(1)
+	Terminate()
 }
 
 func Info(format string, v ...interface{}) {
