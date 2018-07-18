@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"github.com/BurntSushi/toml"
 	"github.com/omzlo/nocand/models/helpers"
 )
@@ -27,15 +28,22 @@ var Settings = Configuration{
 	LogFile:                 "nocand.log",
 }
 
-func Load() error {
-
-	fn, err := helpers.LocateDotFile("nocand.conf")
-
+func DefaultConfigLocation() string {
+	home := helpers.HomeDir()
+	file, err := helpers.LocateFile(home, ".nocand", "config")
 	if err != nil {
-		return err
+		return ""
+	}
+	return file
+}
+
+func Load(file string) error {
+
+	if file == "" {
+		return errors.New("No file")
 	}
 
-	if _, err := toml.DecodeFile(fn, &Settings); err != nil {
+	if _, err := toml.DecodeFile(file, &Settings); err != nil {
 		return err
 	}
 

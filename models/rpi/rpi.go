@@ -335,7 +335,7 @@ func DriverInitialize(reset bool, speed uint) error {
 	if !DriverCheckSignature() {
 		return fmt.Errorf("SPI driver signature check failed.")
 	}
-	clog.Info("Driver signature verified")
+	clog.Info("Driver signature verified.")
 	C.setup_interrupts()
 
 	DriverReady = true

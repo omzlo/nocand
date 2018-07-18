@@ -17,12 +17,15 @@ var (
 	//optLogLevel                int
 	optTest    bool
 	optPowerOn bool
+	optConfig  string
 	//optCurrentLimit            uint
 )
 
 func init() {
 	flag.BoolVar(&optPowerOn, "power-on", true, "Power bus after reset")
 	flag.BoolVar(&optTest, "test", false, "Halt after reset, initialization, without lauching server")
+	flag.StringVar(&optConfig, "config", config.DefaultConfigLocation(), "Config file location.")
+
 	flag.BoolVar(&config.Settings.DriverReset, "driver-reset", config.Settings.DriverReset, "Reset driver at startup (default: true).")
 	flag.UintVar(&config.Settings.PowerMonitoringInterval, "power-monitoring-interval", config.Settings.PowerMonitoringInterval, "CANbus power monitoring interval in seconds (default: 10, disable with 0).")
 	flag.UintVar(&config.Settings.SpiSpeed, "spi-speed", config.Settings.SpiSpeed, "SPI communication speed in bits per second (use with caution).")
@@ -34,7 +37,7 @@ func init() {
 func main() {
 	var start_driver bool
 
-	err_config := config.Load()
+	err_config := config.Load(optConfig)
 
 	flag.Parse()
 
@@ -61,8 +64,9 @@ func main() {
 	}
 
 	if err := controllers.Bus.Initialize(start_driver, config.Settings.SpiSpeed); err != nil {
-		panic(err)
+		clog.Fatal("Failed to connect to PiMaster.")
 	}
+	clog.Info("Successfully connected to PiMaster.")
 
 	controllers.Bus.SetPower(optPowerOn)
 
@@ -75,6 +79,6 @@ func main() {
 	if !optTest {
 		controllers.Bus.Serve()
 	} else {
-		clog.Info("Done.")
+		clog.Terminate()
 	}
 }

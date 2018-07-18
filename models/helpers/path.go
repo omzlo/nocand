@@ -1,41 +1,59 @@
 package helpers
 
 import (
-	"fmt"
 	"os"
 	"os/user"
-	"path"
+	"path/filepath"
 	"runtime"
+	"strings"
 )
 
-func HomeDir() (string, error) {
+func HomeDir() string {
 	home := os.Getenv("HOME")
 	if len(home) != 0 {
-		return home, nil
+		return home
 	}
 
 	if runtime.GOOS == "windows" {
 		drive := os.Getenv("HOMEDRIVE")
 		path := os.Getenv("HOMEPATH")
 		if len(drive) != 0 && len(path) != 0 {
-			return drive + path, nil
+			return drive + path
 		}
 		home = os.Getenv("USERPROFILE")
 		if len(home) != 0 {
-			return home, nil
+			return home
 		}
 	} else {
 		whoami, err := user.Current()
 		if err != nil {
-			return "", err
+			return ""
 		}
 		if len(whoami.HomeDir) != 0 {
-			return whoami.HomeDir, nil
+			return whoami.HomeDir
 		}
 	}
-	return "", fmt.Errorf("Homedir was not found")
+	return ""
 }
 
+func LocateFile(elems ...string) (string, error) {
+	if runtime.GOOS == "windows" {
+		for i, elem := range elems {
+			if strings.HasPrefix(elem, ".") {
+				elems[i] = "_" + elem[1:]
+			}
+		}
+	}
+	vpath := filepath.Join(elems...)
+	_, err := os.Stat(vpath)
+	if err != nil {
+		return vpath, err
+	}
+
+	return vpath, nil
+}
+
+/*
 func LocateDotFile(fname string) (string, error) {
 	var vpath string
 
@@ -57,3 +75,4 @@ func LocateDotFile(fname string) (string, error) {
 
 	return vpath, nil
 }
+*/
