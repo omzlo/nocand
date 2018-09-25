@@ -89,10 +89,11 @@ func help_cmd(fs *flag.FlagSet) error {
 func init_pimaster() error {
 	var start_driver bool
 
+	clog.SetLogLevel(clog.LogLevel(config.Settings.LogLevel))
 	if config.Settings.LogFile != "" {
+		clog.Info("Logs will be saved in %s", config.Settings.LogFile)
 		clog.SetLogFile(config.Settings.LogFile)
 	}
-	clog.SetLogLevel(clog.LogLevel(config.Settings.LogLevel))
 
 	if !config.Settings.Loaded {
 		clog.Info("No configuration file was loaded: %s", config.Settings.LoadError)
@@ -117,6 +118,10 @@ func init_pimaster() error {
 }
 
 func server_cmd(fs *flag.FlagSet) error {
+	if err := controllers.EventServer.ListenAndServe(config.Settings.Bind, config.Settings.AuthToken); err != nil {
+		clog.Fatal("Failed to launch server: %s", err)
+	}
+
 	if err := init_pimaster(); err != nil {
 		return err
 	}

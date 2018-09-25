@@ -41,6 +41,9 @@ func (nc *NocanNetworkController) Initialize(with_reset bool, spi_speed uint) er
 
 func (nc *NocanNetworkController) SetPower(power_on bool) {
 	rpi.DriverSetPower(power_on)
+	if power_on == false {
+		Nodes.Clear()
+	}
 	EventServer.Broadcast(socket.BusPowerEvent, power_on)
 }
 

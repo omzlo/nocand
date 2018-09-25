@@ -210,6 +210,7 @@ func (nc *NodeCollection) Register(udid Udid8) (*Node, error) {
 		}
 	}
 
+	// Find free slot in NodeCollection and in the NodeCache
 	for i := 1; i < 128; i++ {
 		if nc.Nodes[i] == nil && NodeCacheReverseLookup(nocan.NodeId(i)) == false {
 			node := NewNode(nocan.NodeId(i), udid)
@@ -221,7 +222,19 @@ func (nc *NodeCollection) Register(udid Udid8) (*Node, error) {
 		}
 	}
 
-	return nil, errors.New("Maximum number of nodes has been reached, consider clearing the node cache.")
+	// Fallback: find free slot and overwrite and entry in the NodeCache
+	for i := 1; i < 128; i++ {
+		if nc.Nodes[i] == nil {
+			node := NewNode(nocan.NodeId(i), udid)
+			nc.Nodes[i] = node
+			nc.Udids[udid] = node
+			node.Touch()
+			NodeCacheSetEntry(udid, node.Id)
+			return node, nil
+		}
+	}
+
+	return nil, errors.New("Maximum number of nodes (127) has been reached!")
 }
 
 func (nc *NodeCollection) Unregister(node *Node) bool {
@@ -231,6 +244,16 @@ func (nc *NodeCollection) Unregister(node *Node) bool {
 	delete(nc.Udids, node.Udid)
 	nc.Nodes[node.Id] = nil
 	return true
+}
+
+func (nc *NodeCollection) Clear() {
+	nc.Mutex.Lock()
+	defer nc.Mutex.Unlock()
+
+	nc.Udids = make(map[Udid8]*Node)
+	for i, _ := range nc.Nodes {
+		nc.Nodes[i] = nil
+	}
 }
 
 /***

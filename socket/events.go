@@ -599,7 +599,7 @@ func (bp BusPower) PackValue() ([]byte, error) {
 	if bp {
 		b[0] = 1
 	} else {
-		b[1] = 0
+		b[0] = 0
 	}
 	return b, nil
 }

@@ -159,6 +159,7 @@ func (nc *NocanNetworkController) Serve() error {
 }
 
 func (nc *NocanNetworkController) handleMasterNode() {
+MasterLoop:
 	for {
 		msg := <-nc.nodeContexts[0].inputQueue
 
@@ -168,7 +169,8 @@ func (nc *NocanNetworkController) handleMasterNode() {
 			udid := models.CreateUdid8(msg.Bytes())
 			node, err := Nodes.Register(udid)
 			if err != nil {
-				clog.Warning("NOCAN_SYS_ADDRESS_REQUEST: Failed to register device %s, %s", udid, err)
+				clog.Error("NOCAN_SYS_ADDRESS_REQUEST: Failed to register device %s, %s", udid, err)
+				continue MasterLoop
 			} else {
 				clog.Info("Device %s has been registered as node N%d", udid, node.Id)
 			}

@@ -84,7 +84,7 @@ func clientChannelUpdateHandler(c *socket.Client, eid socket.EventId, value []by
 	if cu.Status == socket.CHANNEL_UPDATED {
 		channel.SetContent(cu.Value)
 		Bus.Publish(0, channel.Id, cu.Value)
-        EventServer.Broadcast(socket.ChannelUpdateEvent, socket.NewChannelUpdate(channel.Name, channel.Id, socket.CHANNEL_UPDATED, cu.Value))
+		EventServer.Broadcast(socket.ChannelUpdateEvent, socket.NewChannelUpdate(channel.Name, channel.Id, socket.CHANNEL_UPDATED, cu.Value))
 	}
 	if cu.Status == socket.CHANNEL_DESTROYED {
 		if !Channels.Unregister(channel) {
@@ -184,7 +184,7 @@ func clientFirmwareDownloadRequestHandler(c *socket.Client, eid socket.EventId, 
 	return Bus.SendSystemMessage(node.Id, nocan.SYS_NODE_BOOT_REQUEST, 0x01, nil)
 }
 
-func clientNodeRebootRequest(c *socket.Client, eid socket.EventId, value []byte) error {
+func clientNodeRebootRequestHandler(c *socket.Client, eid socket.EventId, value []byte) error {
 	var nr socket.NodeRebootRequest
 
 	if err := nr.UnpackValue(value); err != nil {
@@ -201,6 +201,18 @@ func clientNodeRebootRequest(c *socket.Client, eid socket.EventId, value []byte)
 	return c.Put(socket.ServerAckEvent, socket.SERVER_SUCCESS)
 }
 
+func clientBusPowerEventHandler(c *socket.Client, eid socket.EventId, value []byte) error {
+	var power socket.BusPower
+
+	if err := power.UnpackValue(value); err != nil {
+		return err
+	}
+
+	Bus.SetPower(bool(power))
+
+	return nil
+}
+
 func init() {
 	EventServer = socket.NewServer()
 	EventServer.RegisterHandler(socket.ChannelUpdateRequestEvent, clientChannelUpdateRequestHandler)
@@ -210,5 +222,6 @@ func init() {
 	EventServer.RegisterHandler(socket.NodeListRequestEvent, clientNodeListRequestHandler)
 	EventServer.RegisterHandler(socket.NodeFirmwareUploadEvent, clientFirmwareUploadHandler)
 	EventServer.RegisterHandler(socket.NodeFirmwareDownloadRequestEvent, clientFirmwareDownloadRequestHandler)
-	EventServer.RegisterHandler(socket.NodeRebootRequestEvent, clientNodeRebootRequest)
+	EventServer.RegisterHandler(socket.NodeRebootRequestEvent, clientNodeRebootRequestHandler)
+	EventServer.RegisterHandler(socket.BusPowerEvent, clientBusPowerEventHandler)
 }

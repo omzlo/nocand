@@ -49,6 +49,10 @@ func (s StatusByte) String() string {
 	for i = 0; i < 8; i++ {
 		if (s & (1 << i)) != 0 {
 			r += "+" + StatusStrings[i]
+		} else {
+			if i == 6 {
+				r += "unpowered"
+			}
 		}
 	}
 	return r
