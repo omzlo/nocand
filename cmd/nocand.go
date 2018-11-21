@@ -87,16 +87,15 @@ func help_cmd(fs *flag.FlagSet) error {
 	return nil
 }
 
-func init_pimaster() error {
-	var start_driver bool
-
+func init_config() {
 	clog.SetLogLevel(clog.LogLevel(config.Settings.LogLevel))
 
 	if !config.Settings.LogFile.IsNull() {
-		if writer := clog.NewFileLogWriter(config.Settings.LogFile.String()); writer == nil {
-			clog.AddWriter(writer)
+		writer := clog.NewFileLogWriter(config.Settings.LogFile.String())
+		if writer == nil {
 			clog.Fatal("Could not create log file '%s'. Note: set log-file='' if you don't want to create a log file.", config.Settings.LogFile)
 		}
+		clog.AddWriter(writer)
 		clog.Info("Logs will be saved in %s", config.Settings.LogFile)
 	} else {
 		clog.Debug("No logs will be saved to file.")
@@ -109,6 +108,10 @@ func init_pimaster() error {
 		clog.Debug("No configuration file was loaded")
 	}
 	clog.Info("nocand version %s", NOCAND_VERSION)
+}
+
+func init_pimaster() error {
+	var start_driver bool
 
 	if config.Settings.DriverReset {
 		start_driver = controllers.BUS_RESET
@@ -128,6 +131,8 @@ func init_pimaster() error {
 }
 
 func server_cmd(fs *flag.FlagSet) error {
+	init_config()
+
 	if err := controllers.EventServer.ListenAndServe(config.Settings.Bind, config.Settings.AuthToken); err != nil {
 		clog.Fatal("Failed to launch server: %s", err)
 	}
@@ -144,6 +149,8 @@ func server_cmd(fs *flag.FlagSet) error {
 }
 
 func poweron_cmd(fs *flag.FlagSet) error {
+	init_config()
+
 	if err := init_pimaster(); err != nil {
 		return err
 	}
@@ -154,6 +161,8 @@ func poweron_cmd(fs *flag.FlagSet) error {
 }
 
 func poweroff_cmd(fs *flag.FlagSet) error {
+	init_config()
+
 	if err := init_pimaster(); err != nil {
 		return err
 	}
