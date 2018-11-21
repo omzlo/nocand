@@ -89,7 +89,11 @@ func (cfs *CommandFlagSet) Usage() string {
 	s = fmt.Sprintf("%s %s\r\n\t- %s\r\n", progname, cfs.UsageText, cfs.HelpText)
 	s += "This command takes the following options:\r\n"
 	cfs.Flags(cfs.Command).VisitAll(func(f *flag.Flag) {
-		s += fmt.Sprintf("\t-%s\t%s (default %s)\r\n", f.Name, f.Usage, f.DefValue)
+		sdefault := ""
+		if len(f.DefValue) == 0 {
+			sdefault = fmt.Sprintf(" (default %q)", f.DefValue)
+		}
+		s += fmt.Sprintf("\t-%s\t%s%s\r\n", f.Name, f.Usage, sdefault)
 	})
 	return s
 }

@@ -206,6 +206,7 @@ func (s *Server) runClient(c *Client) {
 			}
 		} else {
 			clog.Warning("No handler found for event id %d", eid)
+			break
 		}
 	}
 }
