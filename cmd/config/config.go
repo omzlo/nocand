@@ -3,21 +3,23 @@ package config
 import (
 	"errors"
 	"github.com/BurntSushi/toml"
+	"github.com/omzlo/clog"
 	"github.com/omzlo/nocand/models/helpers"
 )
 
 type Configuration struct {
-	Loaded                  bool   `toml:"-"`
-	LoadError               error  `toml:"-"`
-	Bind                    string `toml:"bind"`
-	AuthToken               string `toml:"auth-token"`
-	DriverReset             bool   `toml:"driver-reset"`
-	PowerMonitoringInterval uint   `toml:"power-monitoring-interval"`
-	SpiSpeed                uint   `toml:"spi-speed"`
-	LogLevel                uint   `toml:"log-level"`
-	CurrentLimit            uint   `toml:"current-limit"`
-	LogFile                 string `toml:"log-file"`
-	CheckForUpdates         bool   `toml:"check-for-updates"`
+	Loaded                  bool              `toml:"-"`
+	LoadError               error             `toml:"-"`
+	Bind                    string            `toml:"bind"`
+	AuthToken               string            `toml:"auth-token"`
+	DriverReset             bool              `toml:"driver-reset"`
+	PowerMonitoringInterval uint              `toml:"power-monitoring-interval"`
+	SpiSpeed                uint              `toml:"spi-speed"`
+	LogLevel                clog.LogLevel     `toml:"log-level"`
+	CurrentLimit            uint              `toml:"current-limit"`
+	LogTerminal             string            `toml:"log-terminal"`
+	LogFile                 *helpers.FilePath `toml:"log-file"`
+	CheckForUpdates         bool              `toml:"check-for-updates"`
 }
 
 var Settings = Configuration{
@@ -30,27 +32,15 @@ var Settings = Configuration{
 	SpiSpeed:                250000,
 	LogLevel:                0,
 	CurrentLimit:            0,
-	LogFile:                 "nocand.log",
+	LogTerminal:             "plain",
+	LogFile:                 DefaultLogPath,
 	CheckForUpdates:         true,
 }
 
-func DefaultConfigLocation() string {
-	home := helpers.HomeDir()
-	file, err := helpers.LocateFile(home, ".nocand", "config")
-	if err != nil {
-		return ""
-	}
-	return file
-}
-
-func DefaultLogLocation() string {
-	home := helpers.HomeDir()
-	file, err := helpers.LocateFile(home, ".nocand", "log")
-	if err != nil {
-		return ""
-	}
-	return file
-}
+var (
+	DefaultConfigPath *helpers.FilePath = helpers.HomeDir().Append(".nocand", "config")
+	DefaultLogPath    *helpers.FilePath = helpers.NewFilePath()
+)
 
 func Load(file string) error {
 	Settings.Loaded = false

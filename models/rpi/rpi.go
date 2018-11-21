@@ -8,7 +8,7 @@ package rpi
 import "C"
 import "fmt"
 import "encoding/hex"
-import "github.com/omzlo/nocand/clog"
+import "github.com/omzlo/clog"
 import "github.com/omzlo/nocand/models/can"
 import "github.com/omzlo/nocand/models/device"
 import "sync"

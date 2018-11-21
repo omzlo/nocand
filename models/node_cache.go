@@ -2,7 +2,7 @@ package models
 
 import (
 	"encoding/json"
-	"github.com/omzlo/nocand/clog"
+	"github.com/omzlo/clog"
 	"github.com/omzlo/nocand/models/helpers"
 	"github.com/omzlo/nocand/models/nocan"
 	"os"
@@ -13,7 +13,7 @@ import (
 var nodeCache map[string]nocan.NodeId
 var reverseNodeCache map[nocan.NodeId]bool
 var isDirty bool = false
-var cacheFile string
+var cacheFile *helpers.FilePath
 var delayedSave *time.Timer = nil
 
 type JsonCacheEntry struct {
@@ -25,16 +25,17 @@ func NodeCacheLoad() error {
 	var err error
 	var entries []JsonCacheEntry
 
-	cacheFile, err = helpers.LocateFile(helpers.HomeDir(), ".nocand", "cache")
-	if err != nil && cacheFile == "" {
+	cacheFile = helpers.HomeDir().Append(".nocand", "cache")
+	if cacheFile == nil {
 		return nil
 	}
 
-	f, err := os.Open(cacheFile)
+	f, err := os.Open(cacheFile.String())
 	defer f.Close()
 
 	if err != nil {
 		clog.Debug("Could not open cache file %s: %s", cacheFile, err)
+		cacheFile = nil
 		return err
 	}
 	decoder := json.NewDecoder(f)
@@ -61,7 +62,7 @@ func NodeCacheLoad() error {
 func NodeCacheSave() error {
 	var entries []JsonCacheEntry
 
-	if cacheFile == "" || isDirty == false {
+	if cacheFile == nil || isDirty == false {
 		return nil
 	}
 
@@ -71,7 +72,7 @@ func NodeCacheSave() error {
 
 	sort.SliceStable(entries, func(i, j int) bool { return entries[i].NodeId < entries[i].NodeId })
 
-	f, err := os.Create(cacheFile)
+	f, err := os.Create(cacheFile.String())
 	defer f.Close()
 
 	if err != nil {

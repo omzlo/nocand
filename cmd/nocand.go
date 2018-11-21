@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/omzlo/nocand/clog"
+	"github.com/omzlo/clog"
 	"github.com/omzlo/nocand/cmd/config"
 	"github.com/omzlo/nocand/controllers"
 	"github.com/omzlo/nocand/models/helpers"
@@ -16,7 +16,7 @@ import (
 var NOCAND_VERSION string = "Undefined"
 
 var (
-	optConfig string
+	optConfig *helpers.FilePath = config.DefaultConfigPath
 )
 
 func VersionFlagSet(cmd string) *flag.FlagSet {
@@ -32,13 +32,14 @@ func HelpFlagSet(cmd string) *flag.FlagSet {
 
 func BaseFlagSet(cmd string) *flag.FlagSet {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
-	fs.StringVar(&optConfig, "config", config.DefaultConfigLocation(), "Config file location.")
+	fs.Var(optConfig, "config", fmt.Sprintf("Config file location, defaults to %s", config.DefaultConfigPath))
 	fs.BoolVar(&config.Settings.DriverReset, "driver-reset", config.Settings.DriverReset, "Reset driver at startup (default: true).")
 	fs.UintVar(&config.Settings.PowerMonitoringInterval, "power-monitoring-interval", config.Settings.PowerMonitoringInterval, "CANbus power monitoring interval in seconds (default: 10, disable with 0).")
 	fs.UintVar(&config.Settings.SpiSpeed, "spi-speed", config.Settings.SpiSpeed, "SPI communication speed in bits per second (use with caution).")
-	fs.UintVar(&config.Settings.LogLevel, "log-level", config.Settings.LogLevel, "Log level (0=all, 1=debug and more, 2=info and more, 3=warnings and errors, 4=errors only, 5=nothing)")
+	fs.Var(&config.Settings.LogLevel, "log-level", "Log verbosity level (DEBUGXX, DEBUGX, DEBUG, INFO, WARNING, ERROR or NONE)")
 	fs.UintVar(&config.Settings.CurrentLimit, "current-limit", config.Settings.CurrentLimit, "Current limit level (default=0 -> don't change)")
-	fs.StringVar(&config.Settings.LogFile, "log-file", config.DefaultLogLocation(), "Log file name, if empty no log file is created.")
+	fs.Var(config.Settings.LogFile, "log-file", "Log file name, if empty no log file is created.")
+	fs.StringVar(&config.Settings.LogTerminal, "log-terminal", config.Settings.LogTerminal, "Log to terminal (choices: 'plain', 'color' or 'none').")
 	return fs
 }
 
@@ -90,13 +91,22 @@ func init_pimaster() error {
 	var start_driver bool
 
 	clog.SetLogLevel(clog.LogLevel(config.Settings.LogLevel))
-	if config.Settings.LogFile != "" {
+
+	if !config.Settings.LogFile.IsNull() {
+		if writer := clog.NewFileLogWriter(config.Settings.LogFile.String()); writer == nil {
+			clog.AddWriter(writer)
+			clog.Fatal("Could not create log file '%s'. Note: set log-file='' if you don't want to create a log file.", config.Settings.LogFile)
+		}
 		clog.Info("Logs will be saved in %s", config.Settings.LogFile)
-		clog.SetLogFile(config.Settings.LogFile)
+	} else {
+		clog.Debug("No logs will be saved to file.")
 	}
 
 	if !config.Settings.Loaded {
-		clog.Info("No configuration file was loaded: %s", config.Settings.LoadError)
+		if config.Settings.LoadError != nil {
+			clog.Fatal("Configuration file '%s' was not loaded: %s", optConfig, config.Settings.LoadError)
+		}
+		clog.Debug("No configuration file was loaded")
 	}
 	clog.Info("nocand version %s", NOCAND_VERSION)
 
@@ -175,15 +185,34 @@ func version_cmd(fs *flag.FlagSet) error {
 }
 
 func main() {
+
 	command, fs, err := Commands.Parse()
 
+	fmt.Printf("LOGILE: '%s'\n", config.Settings.LogFile)
+
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\r\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to parse command line: %s\r\n", err)
 		fmt.Fprintf(os.Stderr, "type `%s help` for usage\r\n", path.Base(os.Args[0]))
 		os.Exit(-2)
 	}
 
-	config.Load(optConfig)
+	if !optConfig.IsNull() {
+		config.Load(optConfig.String())
+	}
+
+	fmt.Printf("LOGILE: '%s'\n", config.Settings.LogFile)
+
+	switch config.Settings.LogTerminal {
+	case "plain":
+		clog.AddWriter(clog.PlainTerminal)
+	case "color":
+		clog.AddWriter(clog.ColorTerminal)
+	case "none":
+		// skip
+	default:
+		fmt.Fprintf(os.Stderr, "The log-terminal setting must be either 'plain', 'color' or 'none'.\r\n")
+		os.Exit(-1)
+	}
 
 	if command.Processor == nil {
 		help_cmd(fs)

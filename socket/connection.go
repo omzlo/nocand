@@ -2,7 +2,7 @@ package socket
 
 import (
 	"fmt"
-	"github.com/omzlo/nocand/clog"
+	"github.com/omzlo/clog"
 	"io"
 	"net"
 	"sync"

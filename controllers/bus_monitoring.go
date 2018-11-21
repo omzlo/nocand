@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	"github.com/omzlo/nocand/clog"
+	"github.com/omzlo/clog"
 	"github.com/omzlo/nocand/models/rpi"
 	"github.com/omzlo/nocand/socket"
 	"time"

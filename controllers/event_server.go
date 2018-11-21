@@ -2,7 +2,7 @@ package controllers
 
 import (
 	"fmt"
-	//"github.com/omzlo/nocand/clog"
+	//"github.com/omzlo/clog"
 	"github.com/omzlo/nocand/models"
 	"github.com/omzlo/nocand/models/nocan"
 	"github.com/omzlo/nocand/socket"
