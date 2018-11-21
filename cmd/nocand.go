@@ -188,8 +188,6 @@ func main() {
 
 	command, fs, err := Commands.Parse()
 
-	fmt.Printf("LOGILE: '%s'\n", config.Settings.LogFile)
-
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to parse command line: %s\r\n", err)
 		fmt.Fprintf(os.Stderr, "type `%s help` for usage\r\n", path.Base(os.Args[0]))
@@ -199,8 +197,6 @@ func main() {
 	if !optConfig.IsNull() {
 		config.Load(optConfig.String())
 	}
-
-	fmt.Printf("LOGILE: '%s'\n", config.Settings.LogFile)
 
 	switch config.Settings.LogTerminal {
 	case "plain":
