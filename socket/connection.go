@@ -209,6 +209,7 @@ func (s *Server) runClient(c *Client) {
 			break
 		}
 	}
+	c.TerminationChan <- true
 }
 
 func (s *Server) ListenAndServe(addr string, auth_token string) error {

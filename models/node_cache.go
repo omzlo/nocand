@@ -11,7 +11,7 @@ import (
 )
 
 var nodeCache map[string]nocan.NodeId
-var reverseNodeCache map[nocan.NodeId]bool
+var reverseNodeCache map[nocan.NodeId]string
 var isDirty bool = false
 var cacheFile *helpers.FilePath
 var delayedSave *time.Timer = nil
@@ -51,8 +51,12 @@ func NodeCacheLoad() error {
 			clog.Warning("Could not decode cache entry %d in %s: %s", k, cacheFile, err)
 			return err
 		}
-		nodeCache[v.Udid] = v.NodeId
-		reverseNodeCache[v.NodeId] = true
+		if other, exists := reverseNodeCache[v.NodeId]; exists {
+			clog.Warning("There is already a node %s with id=%d in the cache %s, ignoring node %s with same id", other, v.NodeId, cacheFile, v.Udid)
+		} else {
+			nodeCache[v.Udid] = v.NodeId
+			reverseNodeCache[v.NodeId] = v.Udid
+		}
 	}
 
 	clog.Info("Loaded node cache file %s with %d entries", cacheFile, len(entries))
@@ -91,12 +95,16 @@ func NodeCacheSave() error {
 }
 
 func NodeCacheSetEntry(udid Udid8, node_id nocan.NodeId) bool {
-	v := nodeCache[udid.String()]
-	if v != 0 && v == node_id {
+	v, exists := nodeCache[udid.String()]
+	if exists && v == node_id {
 		return false
 	}
+
+	if existing_entry, exists := reverseNodeCache[node_id]; exists {
+		delete(nodeCache, existing_entry)
+	}
 	nodeCache[udid.String()] = node_id
-	reverseNodeCache[node_id] = true
+	reverseNodeCache[node_id] = udid.String()
 	isDirty = true
 	if delayedSave == nil {
 		delayedSave = time.AfterFunc(1*time.Minute, func() {
@@ -118,5 +126,5 @@ func NodeCacheReverseLookup(node_id nocan.NodeId) bool {
 
 func init() {
 	nodeCache = make(map[string]nocan.NodeId)
-	reverseNodeCache = make(map[nocan.NodeId]bool)
+	reverseNodeCache = make(map[nocan.NodeId]string)
 }
