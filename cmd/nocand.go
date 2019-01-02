@@ -181,10 +181,18 @@ func version_cmd(fs *flag.FlagSet) error {
 			return err
 		}
 		if content[0] != NOCAND_VERSION {
+			var extension string
+
 			fmt.Printf(" - Version %s of nocand is available for download.\r\n", content[0])
 			if len(content) > 1 {
 				fmt.Printf(" - Release notes:\r\n%s\r\n", content[1])
 			}
+			if runtime.GOOS == "windows" {
+				extension = "zip"
+			} else {
+				extension = "tar.gz"
+			}
+			fmt.Printf(" - Download link: https://www.omzlo.com/downloads/nocand-%s-%s.%s\r\n", runtime.GOOS, runtime.GOARCH, extension)
 		} else {
 			fmt.Printf(" - This version of nocand is up-to-date\r\n")
 		}

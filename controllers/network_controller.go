@@ -98,13 +98,6 @@ func (nc *NocanNetworkController) SendSystemMessage(nodeId nocan.NodeId, fn noca
 	return nc.SendMessage(msg)
 }
 
-/*
-func (nc *NocanNetworkController) SendPublishMessage(nodeId nocan.NodeId, channel nocan.ChannelId, data []byte) error {
-	msg := nocan.NewPublishMessage(nodeId, channel, data)
-	return nc.SendMessage(msg)
-}
-*/
-
 func (nc *NocanNetworkController) Publish(node nocan.NodeId, channel nocan.ChannelId, data []byte) error {
 	msg := nocan.NewPublishMessage(node, channel, data)
 	return nc.SendMessage(msg)
@@ -203,7 +196,7 @@ func (nc *NocanNetworkController) handleBusNode(node *models.Node) {
 		case msg := <-inputQueue:
 			node := Nodes.Find(msg.NodeId())
 			if node == nil {
-				clog.Warning("Got message from unregistered node id N%d", msg.NodeId)
+				clog.Warning("Got message from unregistered node id N%d", msg.NodeId())
 			}
 			nc.handleBusNodeMessage(node, msg)
 		case <-terminateSignal:
@@ -264,7 +257,7 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 			channel, err := Channels.Register(channel_name)
 			if err != nil {
 				clog.Warning("SYS_CHANNEL_REGISTER: Failed to register channel %s for node %d, %s", channel_name, msg.NodeId(), err)
-				nc.SendSystemMessage(msg.NodeId(), nocan.SYS_CHANNEL_REGISTER_ACK, 0xFF, channel.Id.ToBytes())
+				nc.SendSystemMessage(msg.NodeId(), nocan.SYS_CHANNEL_REGISTER_ACK, 0xFF, nil)
 			} else {
 				clog.Info("Registered channel %s for node %d as %d", channel_name, msg.NodeId(), channel.Id)
 				nc.SendSystemMessage(msg.NodeId(), nocan.SYS_CHANNEL_REGISTER_ACK, 0x00, channel.Id.ToBytes())
@@ -281,7 +274,7 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 				nc.SendSystemMessage(msg.NodeId(), nocan.SYS_CHANNEL_LOOKUP_ACK, 0x00, channel.Id.ToBytes())
 			} else {
 				clog.Warning("NOCAN_SYS_CHANNEL_LOOKUP: Node %d failed to find id for channel %s", msg.NodeId(), channel_name)
-				nc.SendSystemMessage(msg.NodeId(), nocan.SYS_CHANNEL_LOOKUP_ACK, 0xFF, channel.Id.ToBytes())
+				nc.SendSystemMessage(msg.NodeId(), nocan.SYS_CHANNEL_LOOKUP_ACK, 0xFF, nil)
 			}
 
 		default:
