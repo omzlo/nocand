@@ -1,6 +1,7 @@
 package socket
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/omzlo/nocand/models"
@@ -179,11 +180,40 @@ const (
 	CHANNEL_NOT_FOUND
 )
 
+func (cs ChannelStatus) String() string {
+	switch cs {
+	case CHANNEL_CREATED:
+		return "created"
+	case CHANNEL_UPDATED:
+		return "updated"
+	case CHANNEL_DESTROYED:
+		return "destroyed"
+	case CHANNEL_NOT_FOUND:
+		return "not found"
+	default:
+		return "!unknown!"
+	}
+}
+
 type ChannelUpdate struct {
 	Id     nocan.ChannelId
 	Name   string
 	Status ChannelStatus
 	Value  []byte
+}
+
+func (cu *ChannelUpdate) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&struct {
+		Id     nocan.ChannelId `json:"id"`
+		Name   string          `json:"name"`
+		Status string          `json:"status"`
+		Value  string          `json:"value"`
+	}{
+		Id:     cu.Id,
+		Name:   cu.Name,
+		Status: cu.Status.String(),
+		Value:  string(cu.Value),
+	})
 }
 
 func NewChannelUpdate(chan_name string, chan_id nocan.ChannelId, status ChannelStatus, value []byte) *ChannelUpdate {
@@ -224,9 +254,11 @@ func (cu *ChannelUpdate) UnpackValue(value []byte) error {
 	cu.Id = (nocan.ChannelId(value[1]) << 8) | nocan.ChannelId(value[2])
 
 	lName := int(value[3])
-	if lName == 0 {
-		return errors.New("Empty channel name")
-	}
+	/*
+		if lName == 0 {
+			return errors.New("Empty channel name")
+		}
+	*/
 	if lName > 64 {
 		return errors.New("Channel name exceeds 64 bytes")
 	}
@@ -272,7 +304,7 @@ func (cu ChannelUpdate) String() string {
 //
 //
 type ChannelList struct {
-	Channels []*ChannelUpdate
+	Channels []*ChannelUpdate `json:"channels"`
 }
 
 func NewChannelList() *ChannelList {
@@ -332,9 +364,9 @@ func (cl ChannelList) String() string {
 
 type NodeUpdateRequest nocan.NodeId
 
-func (nu *NodeUpdateRequest) PackValue() ([]byte, error) {
+func (nu NodeUpdateRequest) PackValue() ([]byte, error) {
 	b := make([]byte, 1)
-	b[0] = byte(*nu)
+	b[0] = byte(nu)
 	return b, nil
 }
 
@@ -355,9 +387,9 @@ func (nu NodeUpdateRequest) String() string {
 //
 
 type NodeUpdate struct {
-	Id    nocan.NodeId
-	State models.NodeState
-	Udid  models.Udid8
+	Id    nocan.NodeId     `json:"id"`
+	State models.NodeState `json:"state"`
+	Udid  models.Udid8     `json:"udid"`
 }
 
 func NewNodeUpdate(id nocan.NodeId, state models.NodeState, udid models.Udid8) *NodeUpdate {
@@ -393,7 +425,7 @@ func (nu NodeUpdate) String() string {
 //
 
 type NodeList struct {
-	Nodes []*NodeUpdate
+	Nodes []*NodeUpdate `json:"nodes"`
 }
 
 func NewNodeList() *NodeList {
@@ -660,7 +692,8 @@ const (
 	NodeFirmwareDownloadEvent                = 18
 	NodeFirmwareProgressEvent                = 19
 	NodeRebootRequestEvent                   = 20
-	EventCount                               = 21
+	BusPowerStatusUpdateRequestEvent         = 21
+	EventCount                               = 22
 )
 
 var EventNames = [EventCount]string{
@@ -685,6 +718,7 @@ var EventNames = [EventCount]string{
 	"node-firmware-download-event",
 	"node-firmware-progress-event",
 	"node-reboot-request-event",
+	"bus-power-status-update-request-event",
 }
 
 var EventNameMap map[string]EventId

@@ -25,6 +25,10 @@ func CreateUdid8(b []byte) Udid8 {
 	return udid
 }
 
+func (id Udid8) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + id.String() + `"`), nil
+}
+
 func (id Udid8) String() string {
 	retval := ""
 
@@ -88,6 +92,10 @@ func (ns NodeState) String() string {
 		return "?"
 	}
 	return NodeStateStrings[ns]
+}
+
+func (ns NodeState) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + ns.String() + `"`), nil
 }
 
 // Node

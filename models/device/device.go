@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"strings"
 )
 
 // Info
@@ -43,29 +44,42 @@ var StatusStrings = [...]string{
 	"resistor",
 }
 
-func (s StatusByte) String() string {
+func (s StatusByte) Strings() []string {
 	var i uint
-	r := ""
+	var r []string
+
 	for i = 0; i < 8; i++ {
 		if (s & (1 << i)) != 0 {
-			r += "+" + StatusStrings[i]
+			r = append(r, StatusStrings[i])
 		} else {
 			if i == 6 {
-				r += "unpowered"
+				r = append(r, "unpowered")
 			}
 		}
 	}
 	return r
 }
 
+func (s StatusByte) String() string {
+	var r string
+	for _, s := range s.Strings() {
+		r += "+" + s
+	}
+	return r
+}
+
+func (s StatusByte) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + strings.Join(s.Strings(), ", ") + "\""), nil
+}
+
 // PowerStatus
 //
 //
 type PowerStatus struct {
-	Status       StatusByte
-	Voltage      float32
-	CurrentSense uint16
-	RefLevel     float32
+	Status       StatusByte `json:"status"`
+	Voltage      float32    `json:"voltage"`
+	CurrentSense uint16     `json:"current_sense"`
+	RefLevel     float32    `json:"reference_voltage"`
 }
 
 func (ps PowerStatus) String() string {
