@@ -35,8 +35,13 @@ func NodeCacheLoad() error {
 
 	if err != nil {
 		clog.Debug("Could not open cache file %s: %s", cacheFile, err)
-		cacheFile = nil
-		return err
+		_, err := os.Create(cacheFile.String())
+		if err != nil {
+			clog.Warning("Could not create cache file %s: %s", cacheFile, err)
+			cacheFile = nil
+			return err
+		}
+		return nil
 	}
 	decoder := json.NewDecoder(f)
 	err = decoder.Decode(&entries)
