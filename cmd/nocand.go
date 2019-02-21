@@ -50,10 +50,10 @@ func PowerFlagSet(cmd string) *flag.FlagSet {
 
 var Commands = helpers.CommandFlagSetList{
 	{"help", nil, HelpFlagSet, "help <command>", "Provide detailed help about a command"},
-	{"power-on", poweron_cmd, BaseFlagSet, "power-on [options]", "Power on the NoCAN network and stopy"},
-	{"power-off", poweroff_cmd, BaseFlagSet, "power-on [options]", "Power off the NoCAN network and stop"},
+	{"power-on", poweron_cmd, BaseFlagSet, "power-on [options]", "Power on the NoCAN network and start"},
+	{"power-off", poweroff_cmd, BaseFlagSet, "power-off [options]", "Power off the NoCAN network and stop"},
 	{"server", server_cmd, BaseFlagSet, "server [options]", "Launch the NoCAN network manager and event server"},
-	{"version", version_cmd, VersionFlagSet, "version", "display the version"},
+	{"version", version_cmd, VersionFlagSet, "version", "Display the version"},
 }
 
 func help_cmd(fs *flag.FlagSet) error {
