@@ -194,17 +194,20 @@ func (nc *NocanNetworkController) handleBusNode(node *models.Node) {
 	for {
 		select {
 		case msg := <-inputQueue:
-			node := Nodes.Find(msg.NodeId())
-			if node == nil {
-				clog.Warning("Got message from unregistered node id N%d", msg.NodeId())
+			if msg == nil {
+				clog.Warning("Got NULL message for node N%d", node.Id)
+			} else {
+				nc.handleBusNodeMessage(node, msg)
 			}
-			nc.handleBusNodeMessage(node, msg)
+
 		case <-terminateSignal:
 			close(inputQueue)
 			// close input queue and terminate goroutine
 			return
+			// use a 'return': don't put a 'break' here, it will break from the select only.
 		}
 	}
+
 }
 
 func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *nocan.Message) {
@@ -216,6 +219,7 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 		switch nocan.MessageType(fn) {
 		case nocan.SYS_ADDRESS_CONFIGURE_ACK:
 			node.State = models.NodeStateConnected
+			EventServer.Broadcast(socket.NodeUpdateEvent, socket.NewNodeUpdate(node.Id, node.State, node.Udid))
 
 		case nocan.SYS_NODE_BOOT_ACK:
 			node.State = models.NodeStateBootloader
@@ -261,6 +265,7 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 			} else {
 				clog.Info("Registered channel %s for node %d as %d", channel_name, msg.NodeId(), channel.Id)
 				nc.SendSystemMessage(msg.NodeId(), nocan.SYS_CHANNEL_REGISTER_ACK, 0x00, channel.Id.ToBytes())
+				EventServer.Broadcast(socket.ChannelUpdateEvent, socket.NewChannelUpdate(channel.Name, channel.Id, socket.CHANNEL_CREATED, nil))
 			}
 
 		case nocan.SYS_CHANNEL_LOOKUP:

@@ -2,7 +2,7 @@ package controllers
 
 import (
 	"fmt"
-	//"github.com/omzlo/clog"
+	"github.com/omzlo/clog"
 	"github.com/omzlo/nocand/models"
 	"github.com/omzlo/nocand/models/nocan"
 	"github.com/omzlo/nocand/socket"
@@ -84,6 +84,7 @@ func clientChannelUpdateHandler(c *socket.Client, eid socket.EventId, value []by
 	if cu.Status == socket.CHANNEL_UPDATED {
 		channel.SetContent(cu.Value)
 		Bus.Publish(0, channel.Id, cu.Value)
+		clog.DebugXX("Broadcasting %q", cu.Value)
 		EventServer.Broadcast(socket.ChannelUpdateEvent, socket.NewChannelUpdate(channel.Name, channel.Id, socket.CHANNEL_UPDATED, cu.Value))
 	}
 	if cu.Status == socket.CHANNEL_DESTROYED {
@@ -201,7 +202,7 @@ func clientNodeRebootRequestHandler(c *socket.Client, eid socket.EventId, value 
 	return c.Put(socket.ServerAckEvent, socket.SERVER_SUCCESS)
 }
 
-func clientBusPowerEventHandler(c *socket.Client, eid socket.EventId, value []byte) error {
+func clientBusPowerHandler(c *socket.Client, eid socket.EventId, value []byte) error {
 	var power socket.BusPower
 
 	if err := power.UnpackValue(value); err != nil {
@@ -210,6 +211,11 @@ func clientBusPowerEventHandler(c *socket.Client, eid socket.EventId, value []by
 
 	Bus.SetPower(bool(power))
 
+	return nil
+}
+
+func clientBusPowerUpdateRequestHandler(c *socket.Client, eid socket.EventId, value []byte) error {
+	Bus.RequestPowerStatusUpdate()
 	return nil
 }
 
@@ -223,5 +229,6 @@ func init() {
 	EventServer.RegisterHandler(socket.NodeFirmwareUploadEvent, clientFirmwareUploadHandler)
 	EventServer.RegisterHandler(socket.NodeFirmwareDownloadRequestEvent, clientFirmwareDownloadRequestHandler)
 	EventServer.RegisterHandler(socket.NodeRebootRequestEvent, clientNodeRebootRequestHandler)
-	EventServer.RegisterHandler(socket.BusPowerEvent, clientBusPowerEventHandler)
+	EventServer.RegisterHandler(socket.BusPowerEvent, clientBusPowerHandler)
+	EventServer.RegisterHandler(socket.BusPowerStatusUpdateRequestEvent, clientBusPowerUpdateRequestHandler)
 }

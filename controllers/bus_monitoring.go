@@ -18,18 +18,22 @@ func MilliAmpEstimation(c uint16) uint {
 	return uint(ma)
 }
 
+func (nc *NocanNetworkController) RequestPowerStatusUpdate() {
+	if rpi.DriverReady {
+		ps, err := rpi.DriverUpdatePowerStatus()
+		if err != nil {
+			clog.Warning("Failed to read driver power status: %s", err)
+		} else {
+			clog.DebugX("Driver voltage=%.1f, current sense=%d (~ %d mA), reference voltage=%.2f, status(%x)=%s.", ps.Voltage, ps.CurrentSense, MilliAmpEstimation(ps.CurrentSense), ps.RefLevel, byte(ps.Status), ps.Status)
+		}
+		EventServer.Broadcast(socket.BusPowerStatusUpdateEvent, ps)
+	}
+}
+
 func (nc *NocanNetworkController) RunPowerMonitor(interval time.Duration) {
 	go func() {
 		for {
-			if rpi.DriverReady {
-				ps, err := rpi.DriverUpdatePowerStatus()
-				if err != nil {
-					clog.Warning("Failed to read driver power status: %s", err)
-				} else {
-					clog.DebugX("Driver voltage=%.1f, current sense=%d (~ %d mA), reference voltage=%.2f, status(%x)=%s.", ps.Voltage, ps.CurrentSense, MilliAmpEstimation(ps.CurrentSense), ps.RefLevel, byte(ps.Status), ps.Status)
-				}
-				EventServer.Broadcast(socket.BusPowerStatusUpdateEvent, ps)
-			}
+			nc.RequestPowerStatusUpdate()
 			time.Sleep(interval)
 		}
 	}()
