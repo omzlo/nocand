@@ -219,6 +219,10 @@ func clientBusPowerUpdateRequestHandler(c *socket.Client, eid socket.EventId, va
 	return nil
 }
 
+func clientDeviceInformationRequestHandler(c *socket.Client, eid socket.EventId, value []byte) error {
+	return c.Put(socket.DeviceInformationEvent, DeviceInfo)
+}
+
 func init() {
 	EventServer = socket.NewServer()
 	EventServer.RegisterHandler(socket.ChannelUpdateRequestEvent, clientChannelUpdateRequestHandler)

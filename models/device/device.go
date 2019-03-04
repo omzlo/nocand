@@ -3,6 +3,7 @@ package device
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"strings"
 )
@@ -11,10 +12,51 @@ import (
 //
 //
 type Info struct {
+	Type         [8]byte
 	Signature    [4]byte
 	VersionMajor byte
 	VersionMinor byte
 	ChipId       [12]byte
+}
+
+func (di *Info) PackValue() ([]byte, error) {
+	buf := make([]byte, 0, 26)
+	buf = append(buf, di.Type[:]...)
+	buf = append(buf, di.Signature[:]...)
+	buf = append(buf, di.VersionMajor)
+	buf = append(buf, di.VersionMinor)
+	buf = append(buf, di.ChipId[:]...)
+	return buf, nil
+}
+
+func (di *Info) UnpackValue(b []byte) error {
+	if len(b) < 26 {
+		fmt.Errorf("Device info must be at least 18 bytes long, found %d", len(b))
+	}
+	copy(di.Type[:], b[0:8])
+	copy(di.Signature[:], b[8:12])
+	di.VersionMajor = b[12]
+	di.VersionMinor = b[13]
+	copy(di.ChipId[:], b[14:26])
+	return nil
+}
+
+func (di *Info) String() string {
+	return fmt.Sprintf("%s, firmware version=%d.%d, signature: '%s', chip_id: '%s'",
+		string(di.Type[:]),
+		di.VersionMajor,
+		di.VersionMinor,
+		string(di.Signature[:]),
+		hex.EncodeToString(di.ChipId[:]))
+}
+
+func (di *Info) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`{"type":"%s","signature":"%s","version_major":"%d","version_minor":"%d","chip_id":"%s"}`,
+		string(di.Type[:]),
+		string(di.Signature[:]),
+		di.VersionMajor,
+		di.VersionMinor,
+		hex.EncodeToString(di.ChipId[:]))), nil
 }
 
 // StatusByte

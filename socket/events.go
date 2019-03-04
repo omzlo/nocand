@@ -693,7 +693,9 @@ const (
 	NodeFirmwareProgressEvent                = 19
 	NodeRebootRequestEvent                   = 20
 	BusPowerStatusUpdateRequestEvent         = 21
-	EventCount                               = 22
+	DeviceInformationRequestEvent            = 22
+	DeviceInformationEvent                   = 23
+	EventCount                               = 24
 )
 
 var EventNames = [EventCount]string{
@@ -719,6 +721,8 @@ var EventNames = [EventCount]string{
 	"node-firmware-progress-event",
 	"node-reboot-request-event",
 	"bus-power-status-update-request-event",
+	"device-information-request-event",
+	"device-information--event",
 }
 
 var EventNameMap map[string]EventId

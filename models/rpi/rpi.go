@@ -110,6 +110,8 @@ func DriverReset() error {
 	return SPITransfer(buf[:])
 }
 
+var piMasterType = [8]byte{'P', 'I', 'M', 'A', 'S', 'T', 'E', 'R'}
+
 func DriverReadDeviceInfo() (*device.Info, error) {
 	var buf [19]byte
 	buf[0] = SPI_OP_DEVICE_INFO
@@ -118,6 +120,7 @@ func DriverReadDeviceInfo() (*device.Info, error) {
 		return nil, err
 	}
 	info := &device.Info{}
+	copy(info.Type[:], piMasterType[:])
 	copy(info.Signature[:], buf[1:5])
 	info.VersionMajor = buf[5]
 	info.VersionMinor = buf[6]
@@ -129,25 +132,6 @@ func DriverReadDeviceInfo() (*device.Info, error) {
 // DevicePowerStatus
 //
 //
-type DevicePowerStatus struct {
-	Status       DriverStatusByte
-	Voltage      float32
-	CurrentSense uint16
-	RefLevel     float32
-}
-
-func (ps *DevicePowerStatus) String() string {
-	return fmt.Sprintf("Driver voltage=%.1f, current sense=%d, reference voltage=%.2f, status(%x)=%s.", ps.Voltage, ps.CurrentSense, ps.RefLevel, byte(ps.Status), ps.Status)
-}
-
-func (ps *DevicePowerStatus) PackValue() ([]byte, error) {
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, ps)
-	if err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
 */
 
 func DriverUpdatePowerStatus() (*device.PowerStatus, error) {
@@ -299,30 +283,31 @@ func DriverSendCanFrame(frame can.Frame) error {
 	return nil
 }
 
-func DriverCheckSignature() bool {
+func DriverCheckSignature() (bool, *device.Info) {
 	info, err := DriverReadDeviceInfo()
 	if err != nil {
-		return false
+		return false, nil
 	}
-	clog.Info("Firmware version %d.%d, signature='%s', chip id=%s", info.VersionMajor, info.VersionMinor, string(info.Signature[:]), hex.EncodeToString(info.ChipId[:]))
-	return (info.Signature[0] == 'C' && info.Signature[1] == 'A' && info.Signature[2] == 'N' && info.Signature[3] == '0')
+	clog.Info(info.String())
+	//clog.Info("Firmware version %d.%d, signature='%s', chip id=%s", info.VersionMajor, info.VersionMinor, string(info.Signature[:]), hex.EncodeToString(info.ChipId[:]))
+	return (info.Signature[0] == 'C' && info.Signature[1] == 'A' && info.Signature[2] == 'N' && info.Signature[3] == '0'), info
 }
 
-func DriverInitialize(reset bool, speed uint) error {
+func DriverInitialize(reset bool, speed uint) (*device.Info, error) {
 	DriverReady = false
 
 	C.setup_wiring_pi()
 
 	r := C.wiringPiSPISetup(SpiChannel, C.int(speed))
 	if r < 0 {
-		return fmt.Errorf("Could not open SPI device")
+		return nil, fmt.Errorf("Could not open SPI device")
 	}
 	clog.Info("Connected to driver using SPI interface at %d bps", speed)
 
 	if reset {
 		clog.Info("Reseting driver")
 		if err := DriverReset(); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -332,15 +317,16 @@ func DriverInitialize(reset bool, speed uint) error {
 	}
 	clog.DebugX("TX line is HIGH")
 
-	if !DriverCheckSignature() {
-		return fmt.Errorf("SPI driver signature check failed.")
+	ok, info := DriverCheckSignature()
+	if !ok {
+		return nil, fmt.Errorf("SPI driver signature check failed.")
 	}
 	clog.Info("Driver signature verified.")
 	C.setup_interrupts()
 
 	DriverReady = true
 
-	return nil
+	return info, nil
 }
 
 //export CanRxInterrupt
@@ -358,24 +344,6 @@ func CanRxInterrupt() {
 
 	//clog.DebugXX("Got interrupt on RX pin")
 }
-
-/*
-func RunPowerMonitor(interval time.Duration) {
-	go func() {
-		for {
-			if DriverReady {
-				ps, err := DriverUpdatePowerStatus()
-				if err != nil {
-					clog.Warning("Failed to read driver power status: %s", err)
-				} else {
-					clog.DebugX("Driver voltage=%.1f, current sense=%d, reference voltage=%.2f, status(%x)=%s.", ps.Voltage, ps.CurrentSense, ps.RefLevel, byte(ps.Status), ps.Status)
-				}
-			}
-			time.Sleep(interval)
-		}
-	}()
-}
-*/
 
 func init() {
 	CanTxChannel = make(chan (can.Frame), 32)
@@ -400,21 +368,4 @@ func init() {
 
 		}
 	}()
-	/*
-		go func() {
-			for {
-				if DriverReady {
-					for C.digitalReadRx() != 0 {
-					}
-					frame, e := DriverRecvCanFrame()
-					if e != nil {
-						clog.Error(e.Error())
-						break
-					}
-					clog.Warning("RECV FRAME %s", frame)
-					CanRxChannel <- frame
-				}
-			}
-		}()
-	*/
 }
