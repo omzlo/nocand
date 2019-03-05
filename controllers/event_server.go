@@ -6,6 +6,7 @@ import (
 	"github.com/omzlo/nocand/models"
 	"github.com/omzlo/nocand/models/nocan"
 	"github.com/omzlo/nocand/socket"
+	"time"
 )
 
 var EventServer *socket.Server
@@ -119,9 +120,9 @@ func clientNodeUpdateRequestHandler(c *socket.Client, eid socket.EventId, value 
 	node := Nodes.Find(nocan.NodeId(nur))
 
 	if node == nil {
-		nu = socket.NewNodeUpdate(nocan.NodeId(nur), models.NodeStateUnknown, models.NullUdid8)
+		nu = socket.NewNodeUpdate(nocan.NodeId(nur), models.NodeStateUnknown, models.NullUdid8, time.Unix(0, 0))
 	} else {
-		nu = socket.NewNodeUpdate(nocan.NodeId(nur), node.State, node.Udid)
+		nu = socket.NewNodeUpdate(nocan.NodeId(nur), node.State, node.Udid, node.LastSeen)
 	}
 	return c.Put(socket.NodeUpdateEvent, nu)
 }
@@ -133,7 +134,7 @@ func clientNodeListRequestHandler(c *socket.Client, eid socket.EventId, value []
 
 	nl := socket.NewNodeList()
 	Nodes.Each(func(n *models.Node) {
-		nl.Append(socket.NewNodeUpdate(n.Id, n.State, n.Udid))
+		nl.Append(socket.NewNodeUpdate(n.Id, n.State, n.Udid, n.LastSeen))
 	})
 
 	return c.Put(socket.NodeListEvent, nl)
@@ -235,4 +236,5 @@ func init() {
 	EventServer.RegisterHandler(socket.NodeRebootRequestEvent, clientNodeRebootRequestHandler)
 	EventServer.RegisterHandler(socket.BusPowerEvent, clientBusPowerHandler)
 	EventServer.RegisterHandler(socket.BusPowerStatusUpdateRequestEvent, clientBusPowerUpdateRequestHandler)
+	EventServer.RegisterHandler(socket.DeviceInformationRequestEvent, clientDeviceInformationRequestHandler)
 }

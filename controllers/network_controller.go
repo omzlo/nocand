@@ -219,7 +219,7 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 		switch nocan.MessageType(fn) {
 		case nocan.SYS_ADDRESS_CONFIGURE_ACK:
 			node.State = models.NodeStateConnected
-			EventServer.Broadcast(socket.NodeUpdateEvent, socket.NewNodeUpdate(node.Id, node.State, node.Udid))
+			EventServer.Broadcast(socket.NodeUpdateEvent, socket.NewNodeUpdate(node.Id, node.State, node.Udid, node.LastSeen))
 
 		case nocan.SYS_NODE_BOOT_ACK:
 			node.State = models.NodeStateBootloader

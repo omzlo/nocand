@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/omzlo/nocand/models"
 	"github.com/omzlo/nocand/models/nocan"
+	"time"
 )
 
 var ErrorMissingData error = errors.New("Missing data for value decoder")
@@ -18,7 +19,32 @@ func EncodeUint32(dest []byte, u uint32) {
 }
 
 func DecodeUint32(src []byte) uint32 {
-	return (uint32(src[0]) << 24) | (uint32(src[1]) << 16) | (uint32(src[2]) << 8) | uint32(src[3])
+	return (uint32(src[0]) << 24) |
+		(uint32(src[1]) << 16) |
+		(uint32(src[2]) << 8) |
+		uint32(src[3])
+}
+
+func EncodeUint64(dest []byte, u uint64) {
+	dest[0] = byte(u >> 56)
+	dest[1] = byte(u >> 48)
+	dest[2] = byte(u >> 40)
+	dest[3] = byte(u >> 32)
+	dest[4] = byte(u >> 24)
+	dest[5] = byte(u >> 16)
+	dest[6] = byte(u >> 8)
+	dest[7] = byte(u)
+}
+
+func DecodeUint64(src []byte) uint64 {
+	return (uint64(src[0]) << 56) |
+		(uint64(src[1]) << 48) |
+		(uint64(src[2]) << 40) |
+		(uint64(src[3]) << 32) |
+		(uint64(src[4]) << 24) |
+		(uint64(src[5]) << 16) |
+		(uint64(src[6]) << 8) |
+		uint64(src[7])
 }
 
 /****************************************************************************/
@@ -387,37 +413,41 @@ func (nu NodeUpdateRequest) String() string {
 //
 
 type NodeUpdate struct {
-	Id    nocan.NodeId     `json:"id"`
-	State models.NodeState `json:"state"`
-	Udid  models.Udid8     `json:"udid"`
+	Id       nocan.NodeId     `json:"id"`
+	State    models.NodeState `json:"state"`
+	Udid     models.Udid8     `json:"udid"`
+	LastSeen time.Time        `json:"last_seen"`
 }
 
-func NewNodeUpdate(id nocan.NodeId, state models.NodeState, udid models.Udid8) *NodeUpdate {
-	nu := &NodeUpdate{Id: id, State: state}
+func NewNodeUpdate(id nocan.NodeId, state models.NodeState, udid models.Udid8, last_seen time.Time) *NodeUpdate {
+	nu := &NodeUpdate{Id: id, State: state, LastSeen: last_seen}
 	copy(nu.Udid[:], udid[:])
 	return nu
 }
 
 func (nu *NodeUpdate) PackValue() ([]byte, error) {
-	b := make([]byte, 10)
+	b := make([]byte, 18)
 	b[0] = byte(nu.Id)
 	b[1] = byte(nu.State)
-	copy(b[2:], nu.Udid[:])
+	copy(b[2:10], nu.Udid[:])
+	EncodeUint64(b[10:18], uint64(nu.LastSeen.UnixNano()))
 	return b, nil
 }
 
 func (nu *NodeUpdate) UnpackValue(b []byte) error {
-	if len(b) < 10 {
+	if len(b) < 18 {
 		return ErrorMissingData
 	}
 	nu.Id = nocan.NodeId(b[0])
 	nu.State = models.NodeState(b[1])
-	copy(nu.Udid[:], b[2:])
+	copy(nu.Udid[:], b[2:10])
+	tm := DecodeUint64(b[10:18])
+	nu.LastSeen = time.Unix(0, int64(tm))
 	return nil
 }
 
 func (nu NodeUpdate) String() string {
-	return fmt.Sprintf("#%d\t%s\t%s", nu.Id, nu.Udid, nu.State)
+	return fmt.Sprintf("#%d\t%s\t%s\t%s", nu.Id, nu.Udid, nu.State, nu.LastSeen)
 }
 
 // NodeList
