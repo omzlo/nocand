@@ -420,7 +420,7 @@ type NodeUpdate struct {
 }
 
 func NewNodeUpdate(id nocan.NodeId, state models.NodeState, udid models.Udid8, last_seen time.Time) *NodeUpdate {
-	nu := &NodeUpdate{Id: id, State: state, LastSeen: last_seen}
+	nu := &NodeUpdate{Id: id, State: state, LastSeen: last_seen.UTC()}
 	copy(nu.Udid[:], udid[:])
 	return nu
 }
@@ -442,7 +442,7 @@ func (nu *NodeUpdate) UnpackValue(b []byte) error {
 	nu.State = models.NodeState(b[1])
 	copy(nu.Udid[:], b[2:10])
 	tm := DecodeUint64(b[10:18])
-	nu.LastSeen = time.Unix(0, int64(tm))
+	nu.LastSeen = time.Unix(0, int64(tm)).UTC()
 	return nil
 }
 
