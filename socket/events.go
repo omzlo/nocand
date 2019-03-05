@@ -467,11 +467,10 @@ func (nl *NodeList) Append(nu *NodeUpdate) {
 }
 
 func (nl *NodeList) PackValue() ([]byte, error) {
-	b := make([]byte, len(nl.Nodes)*10)
-	for i, nu := range nl.Nodes {
-		b[i*10] = byte(nu.Id)
-		b[i*10+1] = byte(nu.State)
-		copy(b[i*10+2:], nu.Udid[:])
+	b := make([]byte, 0, len(nl.Nodes)*18)
+	for _, nu := range nl.Nodes {
+		sb, _ := nu.PackValue()
+		b = append(b, sb...)
 	}
 	return b, nil
 }
@@ -487,7 +486,7 @@ func (nl *NodeList) UnpackValue(b []byte) error {
 			return err
 		}
 		nl.Append(nu)
-		b = b[10:]
+		b = b[18:]
 	}
 	return nil
 }
