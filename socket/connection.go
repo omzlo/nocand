@@ -44,7 +44,7 @@ func (c *Client) Get() (EventId, []byte, error) {
 
 	eid, value, err := DecodeFromStream(c.Conn)
 	if err != nil {
-		c.TerminationChan <- true
+		//c.TerminationChan <- true
 		return NoEvent, nil, err
 	}
 	return eid, value, err
@@ -107,6 +107,7 @@ func (s *Server) NewClient(conn net.Conn) *Client {
 	c.Subscriptions = NewSubscriptionList()
 	c.Server = s
 	c.Conn = conn
+	// TODO: move this next line after mutex.lock
 	c.Next = s.clients
 	c.OutputChan = make(chan *Event, 16)
 	c.TerminationChan = make(chan bool)
@@ -230,7 +231,7 @@ func (s *Server) ListenAndServe(addr string, auth_token string) error {
 				clog.Error("Server could not accept connection: %s", err)
 			} else {
 				client := s.NewClient(conn)
-				clog.Info("Created new client %s", client)
+				clog.Debug("Created new client %s", client)
 				go s.runClient(client)
 			}
 		}

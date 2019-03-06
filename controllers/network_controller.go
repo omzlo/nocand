@@ -103,6 +103,33 @@ func (nc *NocanNetworkController) Publish(node nocan.NodeId, channel nocan.Chann
 	return nc.SendMessage(msg)
 }
 
+func (nc *NocanNetworkController) pinger(interval time.Duration) {
+	var dequeue []*models.Node
+	for {
+		dequeue = nil
+
+		Nodes.Each(func(node *models.Node) {
+			inactivity := time.Since(node.LastSeen) / time.Millisecond
+			if inactivity > interval*2 {
+				dequeue = append(dequeue, node)
+			} else if inactivity > interval {
+				nc.SendSystemMessage(node.Id, nocan.SYS_NODE_PING, 0, nil)
+			}
+		})
+		for _, node := range dequeue {
+			clog.Info("Unregistering node %d due to unresponsiveness.", node.Id)
+			Nodes.Unregister(node)
+		}
+		time.Sleep(interval)
+	}
+}
+
+func (nc *NocanNetworkController) RunPinger(interval time.Duration) {
+	if interval > 0 {
+		go nc.pinger(interval)
+	}
+}
+
 func (nc *NocanNetworkController) Serve() error {
 
 	nc.nodeContexts[0].running = true
@@ -194,17 +221,21 @@ func (nc *NocanNetworkController) handleBusNode(node *models.Node) {
 	for {
 		select {
 		case msg := <-inputQueue:
-			node := Nodes.Find(msg.NodeId())
-			if node == nil {
-				clog.Warning("Got message from unregistered node id N%d", msg.NodeId())
+			if msg == nil {
+				clog.Warning("Got NULL message for node N%d", node.Id)
+			} else {
+				nc.handleBusNodeMessage(node, msg)
 			}
-			nc.handleBusNodeMessage(node, msg)
+			node.Touch()
+
 		case <-terminateSignal:
 			close(inputQueue)
 			// close input queue and terminate goroutine
 			return
+			// use a 'return': don't put a 'break' here, it will break from the select only.
 		}
 	}
+
 }
 
 func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *nocan.Message) {
@@ -216,6 +247,7 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 		switch nocan.MessageType(fn) {
 		case nocan.SYS_ADDRESS_CONFIGURE_ACK:
 			node.State = models.NodeStateConnected
+			EventServer.Broadcast(socket.NodeUpdateEvent, socket.NewNodeUpdate(node.Id, node.State, node.Udid, node.LastSeen))
 
 		case nocan.SYS_NODE_BOOT_ACK:
 			node.State = models.NodeStateBootloader
@@ -249,6 +281,9 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 		case nocan.SYS_BOOTLOADER_LEAVE_ACK:
 			// Do nothing
 
+		case nocan.SYS_NODE_PING_ACK:
+			// Do nothing
+
 		case nocan.SYS_CHANNEL_REGISTER:
 			channel_name := node.ExpandAttributes(msg.DataToString())
 			if channel_name != msg.DataToString() {
@@ -261,6 +296,7 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 			} else {
 				clog.Info("Registered channel %s for node %d as %d", channel_name, msg.NodeId(), channel.Id)
 				nc.SendSystemMessage(msg.NodeId(), nocan.SYS_CHANNEL_REGISTER_ACK, 0x00, channel.Id.ToBytes())
+				EventServer.Broadcast(socket.ChannelUpdateEvent, socket.NewChannelUpdate(channel.Name, channel.Id, socket.CHANNEL_CREATED, nil))
 			}
 
 		case nocan.SYS_CHANNEL_LOOKUP:
