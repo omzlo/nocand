@@ -103,6 +103,33 @@ func (nc *NocanNetworkController) Publish(node nocan.NodeId, channel nocan.Chann
 	return nc.SendMessage(msg)
 }
 
+func (nc *NocanNetworkController) pinger(interval time.Duration) {
+	var dequeue []*models.Node
+	for {
+		dequeue = nil
+
+		Nodes.Each(func(node *models.Node) {
+			inactivity := time.Since(node.LastSeen) / time.Millisecond
+			if inactivity > interval*2 {
+				dequeue = append(dequeue, node)
+			} else if inactivity > interval {
+				nc.SendSystemMessage(node.Id, nocan.SYS_NODE_PING, 0, nil)
+			}
+		})
+		for _, node := range dequeue {
+			clog.Info("Unregistering node %d due to unresponsiveness.", node.Id)
+			Nodes.Unregister(node)
+		}
+		time.Sleep(interval)
+	}
+}
+
+func (nc *NocanNetworkController) RunPinger(interval time.Duration) {
+	if interval > 0 {
+		go nc.pinger(interval)
+	}
+}
+
 func (nc *NocanNetworkController) Serve() error {
 
 	nc.nodeContexts[0].running = true
@@ -199,6 +226,7 @@ func (nc *NocanNetworkController) handleBusNode(node *models.Node) {
 			} else {
 				nc.handleBusNodeMessage(node, msg)
 			}
+			node.Touch()
 
 		case <-terminateSignal:
 			close(inputQueue)
@@ -251,6 +279,9 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 			nc.nodeContexts[node.Id].pendingFirmwareOperation = nil
 
 		case nocan.SYS_BOOTLOADER_LEAVE_ACK:
+			// Do nothing
+
+		case nocan.SYS_NODE_PING_ACK:
 			// Do nothing
 
 		case nocan.SYS_CHANNEL_REGISTER:

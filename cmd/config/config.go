@@ -14,6 +14,7 @@ type Configuration struct {
 	AuthToken               string            `toml:"auth-token"`
 	DriverReset             bool              `toml:"driver-reset"`
 	PowerMonitoringInterval uint              `toml:"power-monitoring-interval"`
+	PingInterval            uint              `toml:"ping-interval"`
 	SpiSpeed                uint              `toml:"spi-speed"`
 	LogLevel                clog.LogLevel     `toml:"log-level"`
 	CurrentLimit            uint              `toml:"current-limit"`
@@ -29,6 +30,7 @@ var Settings = Configuration{
 	AuthToken:               "password",
 	DriverReset:             true,
 	PowerMonitoringInterval: 10,
+	PingInterval:            2500,
 	SpiSpeed:                250000,
 	LogLevel:                0,
 	CurrentLimit:            0,

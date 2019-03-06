@@ -724,7 +724,9 @@ const (
 	BusPowerStatusUpdateRequestEvent         = 21
 	DeviceInformationRequestEvent            = 22
 	DeviceInformationEvent                   = 23
-	EventCount                               = 24
+	SystemPropertiesRequestEvent             = 24
+	SystemPropertiesEvent                    = 25
+	EventCount                               = 26
 )
 
 var EventNames = [EventCount]string{
@@ -752,6 +754,8 @@ var EventNames = [EventCount]string{
 	"bus-power-status-update-request-event",
 	"device-information-request-event",
 	"device-information--event",
+	"system-properties-request-event",
+	"system-properties-event",
 }
 
 var EventNameMap map[string]EventId

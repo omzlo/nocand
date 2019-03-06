@@ -231,7 +231,7 @@ func (s *Server) ListenAndServe(addr string, auth_token string) error {
 				clog.Error("Server could not accept connection: %s", err)
 			} else {
 				client := s.NewClient(conn)
-				clog.Info("Created new client %s", client)
+				clog.Debug("Created new client %s", client)
 				go s.runClient(client)
 			}
 		}

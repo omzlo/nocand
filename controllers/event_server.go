@@ -10,6 +10,7 @@ import (
 )
 
 var EventServer *socket.Server
+var SystemProperties *models.Properties = models.NewProperties()
 
 /*
 func clientChannelCreateDestroyHandler(c *socket.Client, eid socket.EventId, value []byte) error {
@@ -221,7 +222,14 @@ func clientBusPowerUpdateRequestHandler(c *socket.Client, eid socket.EventId, va
 }
 
 func clientDeviceInformationRequestHandler(c *socket.Client, eid socket.EventId, value []byte) error {
+	if DeviceInfo == nil {
+		return fmt.Errorf("Device information is not available.")
+	}
 	return c.Put(socket.DeviceInformationEvent, DeviceInfo)
+}
+
+func clientSystemPropertiesRequestHandler(c *socket.Client, eid socket.EventId, value []byte) error {
+	return c.Put(socket.SystemPropertiesEvent, SystemProperties)
 }
 
 func init() {
@@ -237,4 +245,5 @@ func init() {
 	EventServer.RegisterHandler(socket.BusPowerEvent, clientBusPowerHandler)
 	EventServer.RegisterHandler(socket.BusPowerStatusUpdateRequestEvent, clientBusPowerUpdateRequestHandler)
 	EventServer.RegisterHandler(socket.DeviceInformationRequestEvent, clientDeviceInformationRequestHandler)
+	EventServer.RegisterHandler(socket.SystemPropertiesRequestEvent, clientSystemPropertiesRequestHandler)
 }

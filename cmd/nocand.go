@@ -133,6 +133,11 @@ func init_pimaster() error {
 func server_cmd(fs *flag.FlagSet) error {
 	init_config()
 
+	controllers.SystemProperties.AddString("nocand_version", NOCAND_VERSION)
+	controllers.SystemProperties.AddString("nocand_full_version", fmt.Sprintf("nocand version %s-%s-%s\r\n", NOCAND_VERSION, runtime.GOOS, runtime.GOARCH))
+	b, _ := time.Now().UTC().MarshalText()
+	controllers.SystemProperties.AddString("started_at", string(b))
+
 	if err := controllers.EventServer.ListenAndServe(config.Settings.Bind, config.Settings.AuthToken); err != nil {
 		clog.Fatal("Failed to launch server: %s", err)
 	}
@@ -144,6 +149,8 @@ func server_cmd(fs *flag.FlagSet) error {
 	controllers.Bus.SetPower(true)
 
 	controllers.Bus.RunPowerMonitor(time.Duration(config.Settings.PowerMonitoringInterval) * time.Second)
+
+	controllers.Bus.RunPinger(time.Duration(config.Settings.PingInterval) * time.Millisecond)
 
 	return controllers.Bus.Serve()
 }
@@ -173,7 +180,7 @@ func poweroff_cmd(fs *flag.FlagSet) error {
 }
 
 func version_cmd(fs *flag.FlagSet) error {
-	fmt.Printf("nocand version %s-%s-%s\r\n", NOCAND_VERSION, runtime.GOOS, runtime.GOARCH)
+	fmt.Printf("nocand version %s\r\n", controllers.SystemProperties.AsString("nocand_full_version"))
 	if config.Settings.CheckForUpdates {
 		fmt.Printf("\r\nChecking if a new version is available for download:\r\n")
 		content, err := helpers.CheckForUpdates("https://www.omzlo.com/downloads/nocand.version")
