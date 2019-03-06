@@ -5,12 +5,13 @@ import (
 	"github.com/omzlo/clog"
 	"github.com/omzlo/nocand/models"
 	"github.com/omzlo/nocand/models/nocan"
+	"github.com/omzlo/nocand/models/properties"
 	"github.com/omzlo/nocand/socket"
 	"time"
 )
 
 var EventServer *socket.Server
-var SystemProperties *models.Properties = models.NewProperties()
+var SystemProperties *properties.Properties = properties.New()
 
 /*
 func clientChannelCreateDestroyHandler(c *socket.Client, eid socket.EventId, value []byte) error {

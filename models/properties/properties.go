@@ -1,4 +1,4 @@
-package models
+package properties
 
 import (
 	"bytes"
@@ -29,7 +29,7 @@ type Properties struct {
 	Properties map[string]Property
 }
 
-func NewProperties() *Properties {
+func New() *Properties {
 	return &Properties{Properties: make(map[string]Property)}
 }
 
