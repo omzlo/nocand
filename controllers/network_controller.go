@@ -118,6 +118,8 @@ func (nc *NocanNetworkController) pinger(interval time.Duration) {
 		})
 		for _, node := range dequeue {
 			clog.Info("Unregistering node %d due to unresponsiveness.", node.Id)
+			node.State = models.NodeStateUnresponsive
+			EventServer.Broadcast(socket.NodeUpdateEvent, socket.NewNodeUpdate(node.Id, node.State, node.Udid, node.LastSeen))
 			Nodes.Unregister(node)
 		}
 		time.Sleep(interval)
