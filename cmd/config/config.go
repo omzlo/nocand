@@ -30,7 +30,7 @@ var Settings = Configuration{
 	AuthToken:               "password",
 	DriverReset:             true,
 	PowerMonitoringInterval: 10,
-	PingInterval:            2500,
+	PingInterval:            0,
 	SpiSpeed:                250000,
 	LogLevel:                0,
 	CurrentLimit:            0,

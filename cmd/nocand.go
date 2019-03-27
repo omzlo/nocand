@@ -133,8 +133,6 @@ func init_pimaster() error {
 func server_cmd(fs *flag.FlagSet) error {
 	init_config()
 
-	controllers.SystemProperties.AddString("nocand_version", NOCAND_VERSION)
-	controllers.SystemProperties.AddString("nocand_full_version", fmt.Sprintf("nocand version %s-%s-%s\r\n", NOCAND_VERSION, runtime.GOOS, runtime.GOARCH))
 	b, _ := time.Now().UTC().MarshalText()
 	controllers.SystemProperties.AddString("started_at", string(b))
 
@@ -187,7 +185,7 @@ func version_cmd(fs *flag.FlagSet) error {
 		if err != nil {
 			return err
 		}
-		if content[0] != NOCAND_VERSION {
+		if content[0] != controllers.SystemProperties.AsString("nocand_full_version") {
 			var extension string
 
 			fmt.Printf(" - Version %s of nocand is available for download.\r\n", content[0])
@@ -209,6 +207,9 @@ func version_cmd(fs *flag.FlagSet) error {
 }
 
 func main() {
+
+	controllers.SystemProperties.AddString("nocand_version", NOCAND_VERSION)
+	controllers.SystemProperties.AddString("nocand_full_version", fmt.Sprintf("nocand version %s-%s-%s\r\n", NOCAND_VERSION, runtime.GOOS, runtime.GOARCH))
 
 	command, fs, err := Commands.Parse()
 

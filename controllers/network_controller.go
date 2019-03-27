@@ -109,7 +109,7 @@ func (nc *NocanNetworkController) pinger(interval time.Duration) {
 		dequeue = nil
 
 		Nodes.Each(func(node *models.Node) {
-			inactivity := time.Since(node.LastSeen) / time.Millisecond
+			inactivity := time.Since(node.LastSeen)
 			if inactivity > interval*2 {
 				dequeue = append(dequeue, node)
 			} else if inactivity > interval {
@@ -128,7 +128,10 @@ func (nc *NocanNetworkController) pinger(interval time.Duration) {
 
 func (nc *NocanNetworkController) RunPinger(interval time.Duration) {
 	if interval > 0 {
+		clog.Debug("Node ping interval is set to %s", interval)
 		go nc.pinger(interval)
+	} else {
+		clog.Debug("Node pinging is disabled")
 	}
 }
 
