@@ -102,15 +102,16 @@ func (ns NodeState) MarshalJSON() ([]byte, error) {
 //
 //
 type Node struct {
-	State      NodeState
-	Id         nocan.NodeId
-	Udid       Udid8
-	LastSeen   time.Time
-	Attributes map[string]string
+	State           NodeState
+	Id              nocan.NodeId
+	Udid            Udid8
+	LastSeen        time.Time
+	FirmwareVersion uint8
+	Attributes      map[string]string
 }
 
-func NewNode(id nocan.NodeId, udid Udid8) *Node {
-	return &Node{State: NodeStateUnknown, Udid: udid, Id: id, Attributes: make(map[string]string)}
+func NewNode(id nocan.NodeId, udid Udid8, fw_version uint8) *Node {
+	return &Node{State: NodeStateUnknown, Udid: udid, Id: id, FirmwareVersion: fw_version, Attributes: make(map[string]string)}
 }
 
 func (n *Node) Touch() {
@@ -192,14 +193,14 @@ func (nc *NodeCollection) Each(cb func(node *Node)) {
 	}
 }
 
-func (nc *NodeCollection) Register(udid Udid8) (*Node, error) {
+func (nc *NodeCollection) Register(udid Udid8, fw_version uint8) (*Node, error) {
 	if udid == NullUdid8 {
 		return nil, errors.New("Cannot register a node with a NULL udid")
 	}
 
 	if node := nc.Lookup(udid); node != nil {
-		//node.MessageQueue = make(chan *nocan.Message, 16)
 		node.State = NodeStateConnecting
+		node.FirmwareVersion = fw_version
 		return node, nil
 	}
 
@@ -209,7 +210,7 @@ func (nc *NodeCollection) Register(udid Udid8) (*Node, error) {
 	node_id := NodeCacheLookup(udid)
 	if node_id != 0 {
 		if nc.Nodes[node_id] == nil {
-			node := NewNode(node_id, udid)
+			node := NewNode(node_id, udid, fw_version)
 			nc.Nodes[node_id] = node
 			nc.Udids[udid] = node
 			node.Touch()
@@ -221,7 +222,7 @@ func (nc *NodeCollection) Register(udid Udid8) (*Node, error) {
 	// Find free slot in NodeCollection and in the NodeCache
 	for i := 1; i < 128; i++ {
 		if nc.Nodes[i] == nil && NodeCacheReverseLookup(nocan.NodeId(i)) == false {
-			node := NewNode(nocan.NodeId(i), udid)
+			node := NewNode(nocan.NodeId(i), udid, fw_version)
 			nc.Nodes[i] = node
 			nc.Udids[udid] = node
 			node.Touch()
@@ -233,7 +234,7 @@ func (nc *NodeCollection) Register(udid Udid8) (*Node, error) {
 	// Fallback: find free slot and overwrite and entry in the NodeCache
 	for i := 1; i < 128; i++ {
 		if nc.Nodes[i] == nil {
-			node := NewNode(nocan.NodeId(i), udid)
+			node := NewNode(nocan.NodeId(i), udid, fw_version)
 			nc.Nodes[i] = node
 			nc.Udids[udid] = node
 			node.Touch()
@@ -263,74 +264,3 @@ func (nc *NodeCollection) Clear() {
 		nc.Nodes[i] = nil
 	}
 }
-
-/***
-func (n *Node) SendMessage(m *nocan.Message) error {
-	var frame can.Frame
-	var pos uint8
-
-	clog.DebugX("** Sending %s **", m)
-	pos = 0
-	for {
-		frame.CanId = m.CanId | can.CANID_MASK_EXTENDED
-		if pos == 0 {
-			frame.CanId |= nocan.NOCANID_MASK_FIRST
-		}
-		if m.Dlc-pos > 8 {
-			frame.Dlc = 8
-		} else {
-			frame.Dlc = m.Dlc - pos
-			frame.CanId |= nocan.NOCANID_MASK_LAST
-		}
-		copy(frame.Data[:], m.Data[pos:pos+frame.Dlc])
-		if err := rpi.DriverSendCanFrame(&frame); err != nil {
-			return err
-		}
-		pos += frame.Dlc
-		if pos >= m.Dlc {
-			break
-		}
-	}
-	return nil
-}
-
-
-func (n *Node) ReceiveMessage() *nocan.Message {
-	msg, more := <-n.MessageQueue
-	if !more {
-		return nil
-	}
-	n.Touch()
-	return msg
-}
-
-func (n *Node) ExpectSystemMessage(function nocan.MessageType) (*nocan.Message, error) {
-	ticker := time.NewTicker(DEFAULT_EXPECT_TIMEOUT)
-	defer ticker.Stop()
-
-	select {
-	case msg := <-n.MessageQueue:
-		if !msg.IsSystemMessage() {
-			return msg, errors.New("Expected System message")
-		}
-		fn, _ := msg.SystemFunctionParam()
-		if fn != function {
-			return msg, fmt.Errorf("Expected system fumction %d, got %d instead", function, fn)
-		}
-		return msg, nil
-
-	case <-ticker.C:
-		return nil, errors.New("Timeout")
-	}
-}
-
-func (n *Node) SendSystemMessage(function nocan.MessageType, param uint8, data []byte) error {
-	msg := nocan.NewSystemMessage(n.Id, function, param, data)
-	return n.SendMessage(msg)
-}
-
-func (n *Node) Publish(channel nocan.ChannelId, data []byte) error {
-	msg := nocan.NewPublishMessage(n.Id, channel, data)
-	return n.SendMessage(msg)
-}
-***/
