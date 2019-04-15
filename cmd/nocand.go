@@ -16,7 +16,7 @@ import (
 var NOCAND_VERSION string = "Undefined"
 
 var (
-	optConfig *helpers.FilePath = config.DefaultConfigPath
+	optConfig *helpers.FilePath = config.DefaultConfigFile
 )
 
 func VersionFlagSet(cmd string) *flag.FlagSet {
@@ -32,7 +32,7 @@ func HelpFlagSet(cmd string) *flag.FlagSet {
 
 func BaseFlagSet(cmd string) *flag.FlagSet {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
-	fs.Var(optConfig, "config", fmt.Sprintf("Config file location, defaults to %s", config.DefaultConfigPath))
+	fs.Var(optConfig, "config", fmt.Sprintf("Config file location, defaults to %s", config.DefaultConfigFile))
 	fs.BoolVar(&config.Settings.DriverReset, "driver-reset", config.Settings.DriverReset, "Reset driver at startup (default: true).")
 	fs.UintVar(&config.Settings.PowerMonitoringInterval, "power-monitoring-interval", config.Settings.PowerMonitoringInterval, "CANbus power monitoring interval in seconds (default: 10, disable with 0).")
 	fs.UintVar(&config.Settings.SpiSpeed, "spi-speed", config.Settings.SpiSpeed, "SPI communication speed in bits per second (use with caution).")
@@ -107,12 +107,6 @@ func init_config() {
 		clog.Debug("No logs will be saved to file (log-file configuration option is blank).")
 	}
 
-	if !config.Settings.Loaded {
-		if config.Settings.LoadError != nil {
-			clog.Fatal("Configuration file '%s' was not loaded: %s", optConfig, config.Settings.LoadError)
-		}
-		clog.Debug("No configuration file was loaded")
-	}
 	clog.Info("nocand version %s", NOCAND_VERSION)
 }
 
@@ -212,10 +206,29 @@ func version_cmd(fs *flag.FlagSet) error {
 	return nil
 }
 
-func main() {
+func main(){
+  loaded_a_config_file := ""
 
 	controllers.SystemProperties.AddString("nocand_version", NOCAND_VERSION)
 	controllers.SystemProperties.AddString("nocand_full_version", fmt.Sprintf("%s-%s-%s", NOCAND_VERSION, runtime.GOOS, runtime.GOARCH))
+
+  conf_opt := helpers.CheckForConfigFlag()
+  if conf_opt!=nil {
+    if err := helpers.LoadConfiguration(conf_opt, &config.Settings); err != nil {
+      fmt.Fprintf(os.Stderr, "Cloud not load configuration file '%s': %s\r\n", conf_opt, err)
+      os.Exit(-2)
+    }
+    loaded_a_config_file = conf_opt.String()
+  } else {
+    err := helpers.LoadConfiguration(config.DefaultConfigFile, &config.Settings)
+    if err != nil && err!=helpers.FileNotFound {
+      fmt.Fprintf(os.Stderr, "Error in configuration file '%s': %s\r\n", config.DefaultConfigFile, err)
+      os.Exit(-2)
+    }
+    if err!=helpers.FileNotFound {
+      loaded_a_config_file = config.DefaultConfigFile.String()
+    }
+  }
 
 	command, fs, err := Commands.Parse()
 
@@ -223,10 +236,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Failed to parse command line: %s\r\n", err)
 		fmt.Fprintf(os.Stderr, "type `%s help` for usage\r\n", path.Base(os.Args[0]))
 		os.Exit(-2)
-	}
-
-	if !optConfig.IsNull() {
-		config.Load(optConfig.String())
 	}
 
 	switch config.Settings.LogTerminal {
@@ -240,6 +249,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "The log-terminal setting must be either 'plain', 'color' or 'none'.\r\n")
 		os.Exit(-1)
 	}
+
+  if loaded_a_config_file!="" {
+      clog.Info("Loaded configuration from '%s'", loaded_a_config_file)
+  } else {
+      clog.Warning("Configuration file '%s' does not exist and no configuration file was specified with '-config'. Using default configuration options.", config.DefaultConfigFile)
+  }
 
 	if command.Processor == nil {
 		help_cmd(fs)
