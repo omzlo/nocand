@@ -43,6 +43,12 @@ func BaseFlagSet(cmd string) *flag.FlagSet {
 	return fs
 }
 
+func ServerFlagSet(cmd string) *flag.FlagSet {
+	fs := BaseFlagSet(cmd)
+	fs.UintVar(&config.Settings.PingInterval, "ping-interval", config.Settings.PingInterval, "SPI communication speed in bits per second (experimental, defaults to 0 = disabled).")
+	return fs
+}
+
 func PowerFlagSet(cmd string) *flag.FlagSet {
 	fs := BaseFlagSet(cmd)
 	return fs
@@ -98,7 +104,7 @@ func init_config() {
 		clog.AddWriter(writer)
 		clog.Info("Logs will be saved in %s", config.Settings.LogFile)
 	} else {
-		clog.Debug("No logs will be saved to file.")
+		clog.Debug("No logs will be saved to file (log-file configuration option is blank).")
 	}
 
 	if !config.Settings.Loaded {
@@ -120,7 +126,7 @@ func init_pimaster() error {
 	}
 
 	if err := controllers.Bus.Initialize(start_driver, config.Settings.SpiSpeed); err != nil {
-		return fmt.Errorf("Failed to connect to PiMaster.")
+		return fmt.Errorf("Failed to connect to PiMaster: %s", err)
 	}
 	clog.Info("Successfully connected to PiMaster.")
 
@@ -133,8 +139,6 @@ func init_pimaster() error {
 func server_cmd(fs *flag.FlagSet) error {
 	init_config()
 
-	controllers.SystemProperties.AddString("nocand_version", NOCAND_VERSION)
-	controllers.SystemProperties.AddString("nocand_full_version", fmt.Sprintf("nocand version %s-%s-%s\r\n", NOCAND_VERSION, runtime.GOOS, runtime.GOARCH))
 	b, _ := time.Now().UTC().MarshalText()
 	controllers.SystemProperties.AddString("started_at", string(b))
 
@@ -187,7 +191,7 @@ func version_cmd(fs *flag.FlagSet) error {
 		if err != nil {
 			return err
 		}
-		if content[0] != NOCAND_VERSION {
+		if content[0] != controllers.SystemProperties.AsString("nocand_version") {
 			var extension string
 
 			fmt.Printf(" - Version %s of nocand is available for download.\r\n", content[0])
@@ -209,6 +213,9 @@ func version_cmd(fs *flag.FlagSet) error {
 }
 
 func main() {
+
+	controllers.SystemProperties.AddString("nocand_version", NOCAND_VERSION)
+	controllers.SystemProperties.AddString("nocand_full_version", fmt.Sprintf("%s-%s-%s", NOCAND_VERSION, runtime.GOOS, runtime.GOARCH))
 
 	command, fs, err := Commands.Parse()
 

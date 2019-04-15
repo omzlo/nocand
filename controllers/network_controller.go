@@ -109,15 +109,19 @@ func (nc *NocanNetworkController) pinger(interval time.Duration) {
 		dequeue = nil
 
 		Nodes.Each(func(node *models.Node) {
-			inactivity := time.Since(node.LastSeen) / time.Millisecond
-			if inactivity > interval*2 {
-				dequeue = append(dequeue, node)
-			} else if inactivity > interval {
-				nc.SendSystemMessage(node.Id, nocan.SYS_NODE_PING, 0, nil)
+			if node.FirmwareVersion >= 3 {
+				inactivity := time.Since(node.LastSeen)
+				if inactivity > interval*2 {
+					dequeue = append(dequeue, node)
+				} else if inactivity > interval {
+					nc.SendSystemMessage(node.Id, nocan.SYS_NODE_PING, 0, nil)
+				}
 			}
 		})
 		for _, node := range dequeue {
 			clog.Info("Unregistering node %d due to unresponsiveness.", node.Id)
+			node.State = models.NodeStateUnresponsive
+			EventServer.Broadcast(socket.NodeUpdateEvent, socket.NewNodeUpdate(node.Id, node.State, node.Udid, node.LastSeen))
 			Nodes.Unregister(node)
 		}
 		time.Sleep(interval)
@@ -126,7 +130,10 @@ func (nc *NocanNetworkController) pinger(interval time.Duration) {
 
 func (nc *NocanNetworkController) RunPinger(interval time.Duration) {
 	if interval > 0 {
+		clog.Debug("Node ping interval is set to %s", interval)
 		go nc.pinger(interval)
+	} else {
+		clog.Debug("Node pinging is disabled")
 	}
 }
 
@@ -183,16 +190,16 @@ MasterLoop:
 	for {
 		msg := <-nc.nodeContexts[0].inputQueue
 
-		fn, _ := msg.SystemFunctionParam()
+		fn, param := msg.SystemFunctionParam()
 		switch nocan.MessageType(fn) {
 		case nocan.SYS_ADDRESS_REQUEST:
 			udid := models.CreateUdid8(msg.Bytes())
-			node, err := Nodes.Register(udid)
+			node, err := Nodes.Register(udid, param)
 			if err != nil {
 				clog.Error("NOCAN_SYS_ADDRESS_REQUEST: Failed to register device %s, %s", udid, err)
 				continue MasterLoop
 			} else {
-				clog.Info("Device %s has been registered as node N%d", udid, node.Id)
+				clog.Info("Device %s has been registered as node N%d (fw=%d)", udid, node.Id, param)
 			}
 			node.SetAttribute("ID", strconv.Itoa(int(node.Id)))
 

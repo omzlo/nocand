@@ -20,12 +20,13 @@ int digitalReadTx(void)
     return digitalRead(CAN_TX_PIN);
 }
 
-void setup_wiring_pi()
+void setup_wiring_pi(void)
 {
     wiringPiSetup();
     pinMode(CAN_RX_PIN, INPUT);
     pinMode(CAN_TX_PIN, INPUT);
     pinMode(MCU_RESET_PIN, INPUT); // avoid leaving the MCU stuck at reset
+    pullUpDnControl(CAN_TX_PIN, PUD_DOWN);
 }
 
 void setup_interrupts()

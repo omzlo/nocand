@@ -289,7 +289,6 @@ func DriverCheckSignature() (bool, *device.Info) {
 		return false, nil
 	}
 	clog.Info(info.String())
-	//clog.Info("Firmware version %d.%d, signature='%s', chip id=%s", info.VersionMajor, info.VersionMinor, string(info.Signature[:]), hex.EncodeToString(info.ChipId[:]))
 	return (info.Signature[0] == 'C' && info.Signature[1] == 'A' && info.Signature[2] == 'N' && info.Signature[3] == '0'), info
 }
 
@@ -317,9 +316,18 @@ func DriverInitialize(reset bool, speed uint) (*device.Info, error) {
 	}
 	clog.DebugX("TX line is HIGH")
 
-	ok, info := DriverCheckSignature()
+	var info *device.Info
+	var ok bool
+	for i := 1; i <= 3; i++ {
+		ok, info = DriverCheckSignature()
+		if ok {
+			break
+		}
+		clog.Warning("SPI driver signature check failed. Pausing 3 seconds and trying again (%d/3).", i)
+		time.Sleep(3 * time.Second)
+	}
 	if !ok {
-		return nil, fmt.Errorf("SPI driver signature check failed.")
+		return nil, fmt.Errorf("SPI driver signature check failed 3 times.")
 	}
 	clog.Info("Driver signature verified.")
 	C.setup_interrupts()
