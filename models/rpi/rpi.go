@@ -322,6 +322,10 @@ func DriverInitialize(reset bool, speed uint) (*device.Info, error) {
 	}
 	clog.Info("Driver signature verified.")
 	C.setup_interrupts()
+  if C.digitalReadRx() == 0 {
+    CanRxInterrupt()
+    clog.Warning("RX line was in an unexpected state. Nocand attempted to correct the issue.")
+  }
 
 	DriverReady = true
 
