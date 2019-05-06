@@ -681,7 +681,22 @@ func (bp *BusPower) UnpackValue(b []byte) error {
 //
 //
 
-type NodeRebootRequest nocan.NodeId
+type NodeRebootRequest byte
+
+func CreateNodeRebootRequest(nid nocan.NodeId, force bool) NodeRebootRequest {
+  if force {
+    return NodeRebootRequest(nid) | 128
+  }
+  return NodeRebootRequest(nid)
+}
+
+func (nr NodeRebootRequest) NodeId() nocan.NodeId {
+  return nocan.NodeId(nr&0x7F)
+}
+
+func (nr NodeRebootRequest) Force() bool {
+  return (nr&128)!=0
+}
 
 func (nr NodeRebootRequest) PackValue() ([]byte, error) {
 	b := make([]byte, 1)

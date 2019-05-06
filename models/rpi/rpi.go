@@ -289,7 +289,6 @@ func DriverCheckSignature() (bool, *device.Info) {
 		return false, nil
 	}
 	clog.Info(info.String())
-	//clog.Info("Firmware version %d.%d, signature='%s', chip id=%s", info.VersionMajor, info.VersionMinor, string(info.Signature[:]), hex.EncodeToString(info.ChipId[:]))
 	return (info.Signature[0] == 'C' && info.Signature[1] == 'A' && info.Signature[2] == 'N' && info.Signature[3] == '0'), info
 }
 
@@ -323,6 +322,10 @@ func DriverInitialize(reset bool, speed uint) (*device.Info, error) {
 	}
 	clog.Info("Driver signature verified.")
 	C.setup_interrupts()
+  if C.digitalReadRx() == 0 {
+    CanRxInterrupt()
+    clog.Warning("RX line was in an unexpected state. Nocand attempted to correct the issue.")
+  }
 
 	DriverReady = true
 

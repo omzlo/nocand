@@ -6,7 +6,11 @@ import (
 	"os"
 	"path"
 	"strings"
+  "errors"
+  "github.com/BurntSushi/toml"
 )
+
+var FileNotFound error = errors.New("File not found")
 
 type CommandFlagSet struct {
 	Command   string
@@ -131,3 +135,36 @@ func (cfsl CommandFlagSetList) Parse() (*CommandFlagSet, *flag.FlagSet, error) {
 
 	return c, fs, nil
 }
+
+func CheckForConfigFlag() *FilePath {
+  for k, opt := range os.Args {
+    if opt[0] == '-' {
+      opt = opt[1:]
+      if opt[0] == '-' {
+        opt = opt[1:]
+      }
+      if opt == "config" {
+        if k < len(os.Args)+1 {
+          return NewFilePath(os.Args[k+1])
+        }
+      }
+      if strings.HasPrefix(opt, "config=") {
+        return NewFilePath(strings.TrimPrefix(opt, "config="))
+      }
+    }
+  }
+  return nil
+}
+
+func LoadConfiguration(file *FilePath, settings interface{}) error {
+  if !file.Exists() {
+    return FileNotFound
+  }
+
+  if _, err := toml.DecodeFile(file.String(), settings); err != nil {
+    return err
+  }
+
+  return nil
+}
+

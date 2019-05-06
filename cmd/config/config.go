@@ -1,10 +1,8 @@
 package config
 
 import (
-	"errors"
-	"github.com/BurntSushi/toml"
-	"github.com/omzlo/clog"
 	"github.com/omzlo/nocand/models/helpers"
+	"github.com/omzlo/clog"
 )
 
 type Configuration struct {
@@ -30,34 +28,18 @@ var Settings = Configuration{
 	AuthToken:               "password",
 	DriverReset:             true,
 	PowerMonitoringInterval: 10,
-	PingInterval:            2500,
+	PingInterval:            0,
 	SpiSpeed:                250000,
 	LogLevel:                0,
 	CurrentLimit:            0,
 	LogTerminal:             "plain",
-	LogFile:                 DefaultLogPath,
+	LogFile:                 DefaultLogFile,
 	CheckForUpdates:         true,
 }
 
 var (
-	DefaultConfigPath *helpers.FilePath = helpers.HomeDir().Append(".nocand", "config")
-	DefaultLogPath    *helpers.FilePath = helpers.NewFilePath()
+	DefaultConfigFile *helpers.FilePath = helpers.HomeDir().Append(".nocand", "config")
+	DefaultLogFile    *helpers.FilePath = helpers.NewFilePath()
 )
 
-func Load(file string) error {
-	Settings.Loaded = false
-	Settings.LoadError = nil
 
-	if file == "" {
-		Settings.LoadError = errors.New("No file")
-		return Settings.LoadError
-	}
-
-	if _, err := toml.DecodeFile(file, &Settings); err != nil {
-		Settings.LoadError = err
-		return err
-	}
-
-	Settings.Loaded = true
-	return nil
-}
