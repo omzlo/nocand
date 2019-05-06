@@ -189,18 +189,19 @@ func clientFirmwareDownloadRequestHandler(c *socket.Client, eid socket.EventId, 
 }
 
 func clientNodeRebootRequestHandler(c *socket.Client, eid socket.EventId, value []byte) error {
-	var nr socket.NodeRebootRequest
+	var request socket.NodeRebootRequest
 
-	if err := nr.UnpackValue(value); err != nil {
+	if err := request.UnpackValue(value); err != nil {
 		return err
 	}
 
-	node := Nodes.Find(nocan.NodeId(nr))
-	if node == nil {
-		return c.Put(socket.ServerAckEvent, socket.SERVER_NOT_FOUND)
-	}
-
-	Bus.SendSystemMessage(node.Id, nocan.SYS_NODE_BOOT_REQUEST, 0x01, nil)
+  if !request.Force() {
+    node := Nodes.Find(request.NodeId())
+    if node == nil {
+      return c.Put(socket.ServerAckEvent, socket.SERVER_NOT_FOUND)
+    }
+  }
+  Bus.SendSystemMessage(request.NodeId(), nocan.SYS_NODE_BOOT_REQUEST, 0x01, nil)
 
 	return c.Put(socket.ServerAckEvent, socket.SERVER_SUCCESS)
 }
