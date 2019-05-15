@@ -6,6 +6,7 @@ import (
 	"github.com/omzlo/clog"
 	"github.com/omzlo/nocand/cmd/config"
 	"github.com/omzlo/nocand/controllers"
+	"github.com/omzlo/nocand/models"
 	"github.com/omzlo/nocand/models/helpers"
 	"os"
 	"path"
@@ -45,7 +46,8 @@ func BaseFlagSet(cmd string) *flag.FlagSet {
 
 func ServerFlagSet(cmd string) *flag.FlagSet {
 	fs := BaseFlagSet(cmd)
-	fs.UintVar(&config.Settings.PingInterval, "ping-interval", config.Settings.PingInterval, "SPI communication speed in bits per second (experimental, defaults to 0 = disabled).")
+	fs.UintVar(&config.Settings.PingInterval, "ping-interval", config.Settings.PingInterval, "Node ping interval in milliseconds (experimental, defaults to 0 = disabled).")
+	fs.Var(config.Settings.NodeCache, "node-cache", fmt.Sprintf("Node cache file name, defaults to '%s'. Set it to an empty string to disable node caching.", config.DefaultNodeCacheFile))
 	return fs
 }
 
@@ -58,7 +60,7 @@ var Commands = helpers.CommandFlagSetList{
 	{"help", nil, HelpFlagSet, "help <command>", "Provide detailed help about a command"},
 	{"power-on", poweron_cmd, BaseFlagSet, "power-on [options]", "Power on the NoCAN network and start"},
 	{"power-off", poweroff_cmd, BaseFlagSet, "power-off [options]", "Power off the NoCAN network and stop"},
-	{"server", server_cmd, BaseFlagSet, "server [options]", "Launch the NoCAN network manager and event server"},
+	{"server", server_cmd, ServerFlagSet, "server [options]", "Launch the NoCAN network manager and event server"},
 	{"version", version_cmd, VersionFlagSet, "version", "Display the version"},
 }
 
@@ -133,6 +135,8 @@ func init_pimaster() error {
 func server_cmd(fs *flag.FlagSet) error {
 	init_config()
 
+	models.NodeCacheFile(config.Settings.NodeCache)
+
 	b, _ := time.Now().UTC().MarshalText()
 	controllers.SystemProperties.AddString("started_at", string(b))
 
@@ -206,29 +210,29 @@ func version_cmd(fs *flag.FlagSet) error {
 	return nil
 }
 
-func main(){
-  loaded_a_config_file := ""
+func main() {
+	loaded_a_config_file := ""
 
 	controllers.SystemProperties.AddString("nocand_version", NOCAND_VERSION)
 	controllers.SystemProperties.AddString("nocand_full_version", fmt.Sprintf("%s-%s-%s", NOCAND_VERSION, runtime.GOOS, runtime.GOARCH))
 
-  conf_opt := helpers.CheckForConfigFlag()
-  if conf_opt!=nil {
-    if err := helpers.LoadConfiguration(conf_opt, &config.Settings); err != nil {
-      fmt.Fprintf(os.Stderr, "Cloud not load configuration file '%s': %s\r\n", conf_opt, err)
-      os.Exit(-2)
-    }
-    loaded_a_config_file = conf_opt.String()
-  } else {
-    err := helpers.LoadConfiguration(config.DefaultConfigFile, &config.Settings)
-    if err != nil && err!=helpers.FileNotFound {
-      fmt.Fprintf(os.Stderr, "Error in configuration file '%s': %s\r\n", config.DefaultConfigFile, err)
-      os.Exit(-2)
-    }
-    if err!=helpers.FileNotFound {
-      loaded_a_config_file = config.DefaultConfigFile.String()
-    }
-  }
+	conf_opt := helpers.CheckForConfigFlag()
+	if conf_opt != nil {
+		if err := helpers.LoadConfiguration(conf_opt, &config.Settings); err != nil {
+			fmt.Fprintf(os.Stderr, "Cloud not load configuration file '%s': %s\r\n", conf_opt, err)
+			os.Exit(-2)
+		}
+		loaded_a_config_file = conf_opt.String()
+	} else {
+		err := helpers.LoadConfiguration(config.DefaultConfigFile, &config.Settings)
+		if err != nil && err != helpers.FileNotFound {
+			fmt.Fprintf(os.Stderr, "Error in configuration file '%s': %s\r\n", config.DefaultConfigFile, err)
+			os.Exit(-2)
+		}
+		if err != helpers.FileNotFound {
+			loaded_a_config_file = config.DefaultConfigFile.String()
+		}
+	}
 
 	command, fs, err := Commands.Parse()
 
@@ -250,11 +254,11 @@ func main(){
 		os.Exit(-1)
 	}
 
-  if loaded_a_config_file!="" {
-      clog.Info("Loaded configuration from '%s'", loaded_a_config_file)
-  } else {
-      clog.Warning("Configuration file '%s' does not exist and no configuration file was specified with '-config'. Using default configuration options.", config.DefaultConfigFile)
-  }
+	if loaded_a_config_file != "" {
+		clog.Info("Loaded configuration from '%s'", loaded_a_config_file)
+	} else {
+		clog.Warning("Configuration file '%s' does not exist and no configuration file was specified with '-config'. Using default configuration options.", config.DefaultConfigFile)
+	}
 
 	if command.Processor == nil {
 		help_cmd(fs)

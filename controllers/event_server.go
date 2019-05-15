@@ -43,6 +43,7 @@ func clientChannelUpdateRequestHandler(c *socket.Client, eid socket.EventId, val
 	var channel *models.Channel
 
 	if err := cur.UnpackValue(value); err != nil {
+		c.Put(socket.ServerAckEvent, socket.SERVER_BAD_REQUEST)
 		return err
 	}
 
@@ -66,40 +67,48 @@ func clientChannelUpdateHandler(c *socket.Client, eid socket.EventId, value []by
 	var channel *models.Channel
 
 	if err := cu.UnpackValue(value); err != nil {
+		c.Put(socket.ServerAckEvent, socket.SERVER_BAD_REQUEST)
 		return err
 	}
 
 	if cu.Status == socket.CHANNEL_CREATED {
 		_, err := Channels.Register(cu.Name)
-		return err
-	}
-
-	if cu.Name == "" {
-		channel = Channels.Find(cu.Id)
+		if err != nil {
+			c.Put(socket.ServerAckEvent, socket.SERVER_GENERAL_FAILURE)
+			return err
+		}
 	} else {
-		channel = Channels.Lookup(cu.Name)
-	}
 
-	if channel == nil {
-		return fmt.Errorf("Non-existing channel (%d, %s) in channel update event", cu.Id, cu.Name)
-	}
+		if cu.Name == "" {
+			channel = Channels.Find(cu.Id)
+		} else {
+			channel = Channels.Lookup(cu.Name)
+		}
 
-	if cu.Status == socket.CHANNEL_UPDATED {
-		channel.SetContent(cu.Value)
-		Bus.Publish(0, channel.Id, cu.Value)
-		clog.DebugXX("Broadcasting %q", cu.Value)
-		EventServer.Broadcast(socket.ChannelUpdateEvent, socket.NewChannelUpdate(channel.Name, channel.Id, socket.CHANNEL_UPDATED, cu.Value))
-	}
-	if cu.Status == socket.CHANNEL_DESTROYED {
-		if !Channels.Unregister(channel) {
-			return fmt.Errorf("Could not unregister channel %s", cu.Name)
+		if channel == nil {
+			c.Put(socket.ServerAckEvent, socket.SERVER_NOT_FOUND)
+			return fmt.Errorf("Non-existing channel (%d, %s) in channel update event", cu.Id, cu.Name)
+		}
+
+		if cu.Status == socket.CHANNEL_UPDATED {
+			channel.SetContent(cu.Value)
+			Bus.Publish(0, channel.Id, cu.Value)
+			clog.DebugXX("Broadcasting %q", cu.Value)
+			EventServer.Broadcast(socket.ChannelUpdateEvent, socket.NewChannelUpdate(channel.Name, channel.Id, socket.CHANNEL_UPDATED, cu.Value))
+		}
+		if cu.Status == socket.CHANNEL_DESTROYED {
+			if !Channels.Unregister(channel) {
+				c.Put(socket.ServerAckEvent, socket.SERVER_GENERAL_FAILURE)
+				return fmt.Errorf("Could not unregister channel %s", cu.Name)
+			}
 		}
 	}
-	return nil
+	return c.Put(socket.ServerAckEvent, socket.SERVER_SUCCESS)
 }
 
 func clientChannelListRequestHandler(c *socket.Client, eid socket.EventId, value []byte) error {
 	if len(value) != 0 {
+		c.Put(socket.ServerAckEvent, socket.SERVER_BAD_REQUEST)
 		return fmt.Errorf("ChannelListRequestEvent has non-empty value (length=%d)", len(value))
 	}
 
@@ -116,6 +125,7 @@ func clientNodeUpdateRequestHandler(c *socket.Client, eid socket.EventId, value 
 	var nu *socket.NodeUpdate
 
 	if err := nur.UnpackValue(value); err != nil {
+		c.Put(socket.ServerAckEvent, socket.SERVER_BAD_REQUEST)
 		return err
 	}
 
@@ -131,6 +141,7 @@ func clientNodeUpdateRequestHandler(c *socket.Client, eid socket.EventId, value 
 
 func clientNodeListRequestHandler(c *socket.Client, eid socket.EventId, value []byte) error {
 	if len(value) != 0 {
+		c.Put(socket.ServerAckEvent, socket.SERVER_BAD_REQUEST)
 		return fmt.Errorf("ChannelListRequestEvent has non-empty value (length=%d)", len(value))
 	}
 
@@ -146,6 +157,7 @@ func clientFirmwareUploadHandler(c *socket.Client, eid socket.EventId, value []b
 	firmware := new(socket.NodeFirmware)
 
 	if err := firmware.UnpackValue(value); err != nil {
+		c.Put(socket.ServerAckEvent, socket.SERVER_BAD_REQUEST)
 		return err
 	}
 
@@ -166,13 +178,18 @@ func clientFirmwareUploadHandler(c *socket.Client, eid socket.EventId, value []b
 	}
 
 	Bus.nodeContexts[node.Id].pendingFirmwareOperation = NewNodeFirmwareOperation(c, NODE_OP_UPLOAD_FLASH, progress, firmware)
-	return Bus.SendSystemMessage(node.Id, nocan.SYS_NODE_BOOT_REQUEST, 0x01, nil)
+	if err := Bus.SendSystemMessage(node.Id, nocan.SYS_NODE_BOOT_REQUEST, 0x01, nil); err != nil {
+		c.Put(socket.NodeFirmwareProgressEvent, progress.Failed())
+		return fmt.Errorf("Boot request for node %d firmware upload failed: %s", firmware.Id, err)
+	}
+	return c.Put(socket.NodeFirmwareProgressEvent, progress.Update(0, 0))
 }
 
 func clientFirmwareDownloadRequestHandler(c *socket.Client, eid socket.EventId, value []byte) error {
 	firmware := new(socket.NodeFirmware)
 
 	if err := firmware.UnpackValue(value); err != nil {
+		c.Put(socket.ServerAckEvent, socket.SERVER_BAD_REQUEST)
 		return err
 	}
 
@@ -185,23 +202,28 @@ func clientFirmwareDownloadRequestHandler(c *socket.Client, eid socket.EventId, 
 	}
 
 	Bus.nodeContexts[node.Id].pendingFirmwareOperation = NewNodeFirmwareOperation(c, NODE_OP_DOWNLOAD_FLASH, progress, firmware)
-	return Bus.SendSystemMessage(node.Id, nocan.SYS_NODE_BOOT_REQUEST, 0x01, nil)
+	if err := Bus.SendSystemMessage(node.Id, nocan.SYS_NODE_BOOT_REQUEST, 0x01, nil); err != nil {
+		c.Put(socket.NodeFirmwareProgressEvent, progress.Failed())
+		return fmt.Errorf("Boot request for node %d firmware download failed: %s", firmware.Id, err)
+	}
+	return c.Put(socket.NodeFirmwareProgressEvent, progress.Update(0, 0))
 }
 
 func clientNodeRebootRequestHandler(c *socket.Client, eid socket.EventId, value []byte) error {
 	var request socket.NodeRebootRequest
 
 	if err := request.UnpackValue(value); err != nil {
+		c.Put(socket.ServerAckEvent, socket.SERVER_BAD_REQUEST)
 		return err
 	}
 
-  if !request.Force() {
-    node := Nodes.Find(request.NodeId())
-    if node == nil {
-      return c.Put(socket.ServerAckEvent, socket.SERVER_NOT_FOUND)
-    }
-  }
-  Bus.SendSystemMessage(request.NodeId(), nocan.SYS_NODE_BOOT_REQUEST, 0x01, nil)
+	if !request.Force() {
+		node := Nodes.Find(request.NodeId())
+		if node == nil {
+			return c.Put(socket.ServerAckEvent, socket.SERVER_NOT_FOUND)
+		}
+	}
+	Bus.SendSystemMessage(request.NodeId(), nocan.SYS_NODE_BOOT_REQUEST, 0x01, nil)
 
 	return c.Put(socket.ServerAckEvent, socket.SERVER_SUCCESS)
 }
@@ -210,21 +232,24 @@ func clientBusPowerHandler(c *socket.Client, eid socket.EventId, value []byte) e
 	var power socket.BusPower
 
 	if err := power.UnpackValue(value); err != nil {
+		c.Put(socket.ServerAckEvent, socket.SERVER_BAD_REQUEST)
 		return err
 	}
 
 	Bus.SetPower(bool(power))
 
-	return nil
+	return c.Put(socket.ServerAckEvent, socket.SERVER_SUCCESS)
 }
 
 func clientBusPowerUpdateRequestHandler(c *socket.Client, eid socket.EventId, value []byte) error {
 	Bus.RequestPowerStatusUpdate()
+	// no ServerAckEvent here
 	return nil
 }
 
 func clientDeviceInformationRequestHandler(c *socket.Client, eid socket.EventId, value []byte) error {
 	if DeviceInfo == nil {
+		c.Put(socket.ServerAckEvent, socket.SERVER_GENERAL_FAILURE)
 		return fmt.Errorf("Device information is not available.")
 	}
 	return c.Put(socket.DeviceInformationEvent, DeviceInfo)
