@@ -21,11 +21,19 @@ type JsonCacheEntry struct {
 	NodeId nocan.NodeId
 }
 
+func NodeCacheFile(file *helpers.FilePath) {
+	if file.String() == "" {
+		cacheFile = nil
+	} else {
+		cacheFile = file
+	}
+}
+
 func NodeCacheLoad() error {
 	var err error
 	var entries []JsonCacheEntry
 
-	cacheFile = helpers.HomeDir().Append(".nocand", "cache")
+	//cacheFile = helpers.HomeDir().Append(".nocand", "cache")
 	if cacheFile == nil {
 		return nil
 	}

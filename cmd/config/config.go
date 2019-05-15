@@ -1,8 +1,8 @@
 package config
 
 import (
-	"github.com/omzlo/nocand/models/helpers"
 	"github.com/omzlo/clog"
+	"github.com/omzlo/nocand/models/helpers"
 )
 
 type Configuration struct {
@@ -18,6 +18,7 @@ type Configuration struct {
 	CurrentLimit            uint              `toml:"current-limit"`
 	LogTerminal             string            `toml:"log-terminal"`
 	LogFile                 *helpers.FilePath `toml:"log-file"`
+	NodeCache               *helpers.FilePath `toml:"node-cache"`
 	CheckForUpdates         bool              `toml:"check-for-updates"`
 }
 
@@ -34,12 +35,12 @@ var Settings = Configuration{
 	CurrentLimit:            0,
 	LogTerminal:             "plain",
 	LogFile:                 DefaultLogFile,
+	NodeCache:               DefaultNodeCacheFile,
 	CheckForUpdates:         true,
 }
 
 var (
-	DefaultConfigFile *helpers.FilePath = helpers.HomeDir().Append(".nocand", "config")
-	DefaultLogFile    *helpers.FilePath = helpers.NewFilePath()
+	DefaultConfigFile    *helpers.FilePath = helpers.HomeDir().Append(".nocand", "config")
+	DefaultNodeCacheFile *helpers.FilePath = helpers.HomeDir().Append(".nocand", "cache")
+	DefaultLogFile       *helpers.FilePath = helpers.NewFilePath()
 )
-
-
