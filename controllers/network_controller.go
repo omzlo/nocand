@@ -157,6 +157,11 @@ func (nc *NocanNetworkController) Serve() error {
 			continue
 		}
 
+		if frame.Dlc > 8 {
+			clog.Error("Frame DLC is greater than 8, discarding %s.", frame)
+			continue
+		}
+
 		if !nc.nodeContexts[nodeId].running { // sending message from an unregistered node?
 			clog.Warning("Got a frame from unknown node %d, dicarding %s.", nodeId, frame)
 			continue
