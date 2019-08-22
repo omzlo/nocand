@@ -59,10 +59,10 @@ func clientAuthHandler(c *Client, eid EventId, value []byte) error {
 	if string(auth) == c.Server.AuthToken {
 		c.Authenticated = true
 		clog.Info("Client %s successfully authenticated", c)
-		return c.Put(ServerAckEvent, SERVER_SUCCESS)
+		return c.Put(ServerAckEvent, SERVER_ACK_SUCCESS)
 	}
 	clog.Info("Client %s failed to authenticate using key '%s'", c, auth)
-	return c.Put(ServerAckEvent, SERVER_UNAUTHORIZED)
+	return c.Put(ServerAckEvent, SERVER_ACK_UNAUTHORIZED)
 }
 
 func clientSubscribeHandler(c *Client, eid EventId, value []byte) error {
@@ -72,7 +72,7 @@ func clientSubscribeHandler(c *Client, eid EventId, value []byte) error {
 		return err
 	}
 	c.Subscriptions = sl
-	return c.Put(ServerAckEvent, SERVER_SUCCESS)
+	return c.Put(ServerAckEvent, SERVER_ACK_SUCCESS)
 }
 
 func clientHelloHandler(c *Client, eid EventId, value []byte) error {
@@ -198,7 +198,7 @@ func (s *Server) runClient(c *Client) {
 		handler := s.handlers[eid]
 		if handler != nil {
 			if !c.Authenticated && eid != ClientAuthEvent && eid != ClientHelloEvent {
-				c.Put(ServerAckEvent, SERVER_UNAUTHORIZED)
+				c.Put(ServerAckEvent, SERVER_ACK_UNAUTHORIZED)
 				break
 			}
 			if err = handler(c, eid, value); err != nil {
@@ -261,24 +261,27 @@ func Dial(addr string, auth string) (*EventConn, error) {
 	ec := &EventConn{Conn: conn, Addr: addr}
 
 	if err := ec.Put(ClientHelloEvent, nil); err != nil {
+		ec.Close()
 		return nil, err
 	}
 	eid, value, err := ec.Get()
 	if eid != ServerHelloEvent {
+		ec.Close()
 		return nil, fmt.Errorf("Expected ServerHelloEvent %d from server %s, got %d", ServerHelloEvent, addr, eid)
 	}
 	if len(value) != 4 || value[0] != 'E' || value[1] != 'M' || value[2] != 1 || value[3] != 0 {
+		ec.Close()
 		return nil, fmt.Errorf("Unexpected response to ClientHelloEvent from server %s: %q", addr, value)
 	}
 
 	if err = ec.Put(ClientAuthEvent, []byte(auth)); err != nil {
+		ec.Close()
 		return nil, err
 	}
-	err = ec.GetAck()
-	if err != nil {
+	if err = ec.GetAck(); err != nil {
+		ec.Close()
 		return nil, err
 	}
-
 	return ec, nil
 }
 
@@ -294,16 +297,18 @@ func (conn *EventConn) GetAck() error {
 	if err != nil {
 		return err
 	}
+
 	if eid != ServerAckEvent {
 		return fmt.Errorf("Expected Ack event %d from server %s, got %d instead", ServerAckEvent, eid)
 	}
-	if len(val) != 1 {
-		return fmt.Errorf("Expected Ack event value with length == 1 from server %s, got %d", conn.Addr, len(val))
+
+	var sack ServerAck
+
+	if err = sack.UnpackValue(val); err != nil {
+		return err
 	}
-	if val[0] != SERVER_SUCCESS {
-		return fmt.Errorf("Request to event server %s failed, Ack code %d '%s'", conn.Addr, val[0], ServerAckToString(val[0]))
-	}
-	return nil
+
+	return sack.ToError()
 }
 
 func (conn *EventConn) Get() (EventId, []byte, error) {
@@ -318,6 +323,15 @@ func (conn *EventConn) WaitFor(eid EventId) ([]byte, error) {
 		}
 		if reid == eid {
 			return rdata, nil
+		}
+		if reid == ServerAckEvent {
+			var ack ServerAck
+			if err := ack.UnpackValue(rdata); err != nil {
+				return nil, err
+			}
+			if ack != SERVER_ACK_SUCCESS {
+				return nil, ack.ToError()
+			}
 		}
 	}
 }

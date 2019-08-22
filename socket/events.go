@@ -117,12 +117,15 @@ func (a *Authenticator) UnpackValue(b []byte) error {
 //
 //
 
+type ServerAck byte
+
 const (
-	SERVER_SUCCESS byte = iota
-	SERVER_BAD_REQUEST
-	SERVER_UNAUTHORIZED
-	SERVER_NOT_FOUND
-	SERVER_GENERAL_FAILURE
+	SERVER_ACK_SUCCESS ServerAck = iota
+	SERVER_ACK_BAD_REQUEST
+	SERVER_ACK_UNAUTHORIZED
+	SERVER_ACK_NOT_FOUND
+	SERVER_ACK_GENERAL_FAILURE
+	SERVER_ACK_UNKNOWN
 )
 
 var serverAckStrings = [5]string{
@@ -133,11 +136,49 @@ var serverAckStrings = [5]string{
 	"General failure",
 }
 
-func ServerAckToString(sa byte) string {
+var (
+	ErrorServerAckBadRequest     = errors.New("Bad request")
+	ErrorServerAckUnauthorized   = errors.New("Unauthorized")
+	ErrorServerAckNotFound       = errors.New("Not found")
+	ErrorServerAckGeneralFailure = errors.New("General failure")
+	ErrorServerAckUnknown        = errors.New("Unknown error")
+)
+
+func (sa ServerAck) PackValue() ([]byte, error) {
+	p := make([]byte, 1)
+	p[0] = byte(sa)
+	return p, nil
+}
+
+func (sa *ServerAck) UnpackValue(value []byte) error {
+	if len(value) < 1 {
+		return ErrorMissingData
+	}
+	*sa = ServerAck(value[0])
+	return nil
+}
+
+func (sa ServerAck) String() string {
 	if sa < 5 {
 		return serverAckStrings[sa]
 	}
-	return "!UNKNOWN!"
+	return "Unknown error"
+}
+
+func (sa ServerAck) ToError() error {
+	switch sa {
+	case SERVER_ACK_SUCCESS:
+		return nil
+	case SERVER_ACK_BAD_REQUEST:
+		return ErrorServerAckBadRequest
+	case SERVER_ACK_UNAUTHORIZED:
+		return ErrorServerAckUnauthorized
+	case SERVER_ACK_NOT_FOUND:
+		return ErrorServerAckNotFound
+	case SERVER_ACK_GENERAL_FAILURE:
+		return ErrorServerAckGeneralFailure
+	}
+	return ErrorServerAckUnknown
 }
 
 /****************************************************************************/
