@@ -3,15 +3,16 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+	"path"
+	"runtime"
+	"time"
+
 	"github.com/omzlo/clog"
 	"github.com/omzlo/nocand/cmd/config"
 	"github.com/omzlo/nocand/controllers"
 	"github.com/omzlo/nocand/models"
 	"github.com/omzlo/nocand/models/helpers"
-	"os"
-	"path"
-	"runtime"
-	"time"
 )
 
 var NOCAND_VERSION string = "Undefined"
@@ -219,7 +220,7 @@ func main() {
 	conf_opt := helpers.CheckForConfigFlag()
 	if conf_opt != nil {
 		if err := helpers.LoadConfiguration(conf_opt, &config.Settings); err != nil {
-			fmt.Fprintf(os.Stderr, "Cloud not load configuration file '%s': %s\r\n", conf_opt, err)
+			fmt.Fprintf(os.Stderr, "Could not load configuration file '%s': %s\r\n", conf_opt, err)
 			os.Exit(-2)
 		}
 		loaded_a_config_file = conf_opt.String()

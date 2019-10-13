@@ -60,7 +60,7 @@ func SetLogLevel(level LogLevel) {
 func SetLogFile(fname string) {
 	logfile, err := os.Create(fname)
 	if err != nil {
-		Fatal("Cloud not open log file, %s", err)
+		Fatal("Could not open log file, %s", err)
 	}
 	filelog = log.New(logfile, "", log.LstdFlags)
 	filelog.Println("**************** START *****************")
