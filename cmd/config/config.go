@@ -30,7 +30,7 @@ var Settings = Configuration{
 	DriverReset:             true,
 	PowerMonitoringInterval: 10,
 	PingInterval:            0,
-	SpiSpeed:                250000,
+	SpiSpeed:                500000,
 	LogLevel:                0,
 	CurrentLimit:            0,
 	LogTerminal:             "plain",
