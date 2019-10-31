@@ -7,7 +7,8 @@ package rpi
 */
 import "C"
 import "fmt"
-import "encoding/hex"
+
+//import "encoding/hex"
 import "github.com/omzlo/clog"
 import "github.com/omzlo/nocand/models/can"
 import "github.com/omzlo/nocand/models/device"
@@ -68,12 +69,9 @@ var trCounter uint = 0
 
 func SPITransfer(buf []byte) error {
 	var block [128]C.uchar
-	var counter uint
+	//var counter uint
 
-	SPIMutex.Lock()
-	defer SPIMutex.Unlock()
-
-	counter = trCounter
+	//counter = trCounter
 	trCounter++
 
 	lbuf := len(buf)
@@ -86,9 +84,11 @@ func SPITransfer(buf []byte) error {
 		block[i] = C.uchar(buf[i])
 	}
 
-	clog.DebugX("(%d) SPI SEND %d: %s (%s)", counter, lbuf, hex.EncodeToString(buf), spi_op_names[buf[0]])
+	//clog.DebugX("(%d) SPI SEND %d: %s (%s)", counter, lbuf, hex.EncodeToString(buf), spi_op_names[buf[0]])
 
+	SPIMutex.Lock()
 	r := C.wiringPiSPIDataRW(SpiChannel, &block[0], C.int(len(buf)))
+	SPIMutex.Unlock()
 
 	if r < 0 {
 		return fmt.Errorf("SPI.Transfer: transfer error")
@@ -97,7 +97,7 @@ func SPITransfer(buf []byte) error {
 	for i := 0; i < lbuf; i++ {
 		buf[i] = byte(block[i])
 	}
-	clog.DebugX("(%d) SPI RECV %d: %s", counter, lbuf, hex.EncodeToString(buf))
+	//clog.DebugX("(%d) SPI RECV %d: %s", counter, lbuf, hex.EncodeToString(buf))
 	return nil
 }
 
@@ -322,10 +322,10 @@ func DriverInitialize(reset bool, speed uint) (*device.Info, error) {
 	}
 	clog.Info("Driver signature verified.")
 	C.setup_interrupts()
-  if C.digitalReadRx() == 0 {
-    CanRxInterrupt()
-    clog.Warning("RX line was in an unexpected state. Nocand attempted to correct the issue.")
-  }
+	if C.digitalReadRx() == 0 {
+		CanRxInterrupt()
+		clog.Warning("RX line was in an unexpected state. Nocand attempted to correct the issue.")
+	}
 
 	DriverReady = true
 
@@ -334,23 +334,28 @@ func DriverInitialize(reset bool, speed uint) (*device.Info, error) {
 
 //export CanRxInterrupt
 func CanRxInterrupt() {
+	cnt := 0
 
+	for C.digitalReadRx() != 0 {
+	}
 	for C.digitalReadRx() == 0 {
 		frame, e := DriverRecvCanFrame()
 		if e != nil {
 			clog.Error(e.Error())
 			break
 		}
-		clog.DebugXX("RECV FRAME %s", frame)
+		//clog.DebugXX("RECV FRAME %s", frame)
 		CanRxChannel <- *frame
+		cnt++
 	}
 
 	//clog.DebugXX("Got interrupt on RX pin")
+	clog.Warning("STATS CNT=%d LEN=%d", cnt, len(CanRxChannel))
 }
 
 func init() {
 	CanTxChannel = make(chan (can.Frame), 32)
-	CanRxChannel = make(chan (can.Frame), 32)
+	CanRxChannel = make(chan (can.Frame), 1000)
 
 	go func() {
 		for {
@@ -369,6 +374,26 @@ func init() {
 			}
 			clog.DebugXX("SEND FRAME %s", frame)
 
+		}
+	}()
+
+	go func() {
+		for !DriverReady {
+		}
+		for {
+			if C.digitalReadRx() == 0 {
+				for C.digitalReadRx() == 0 {
+					frame, e := DriverRecvCanFrame()
+					if e != nil {
+						clog.Error(e.Error())
+						break
+					}
+					//clog.DebugXX("RECV FRAME %s", frame)
+					CanRxChannel <- *frame
+				}
+			} else {
+				time.Sleep(1 * time.Millisecond)
+			}
 		}
 	}()
 }
