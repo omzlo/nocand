@@ -334,7 +334,7 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 
 		channel := Channels.Find(msg.ChannelId())
 		if channel != nil {
-			clog.Info("Updated content of channel '%s' (id=%d) to %s", channel.Name, msg.ChannelId(), msg.Bytes())
+			clog.Info("Updated content of channel '%s' (id=%d) to %q", channel.Name, msg.ChannelId(), msg.Bytes())
 			channel.SetContent(msg.Bytes())
 			EventServer.Broadcast(socket.ChannelUpdateEvent, socket.NewChannelUpdate(channel.Name, channel.Id, socket.CHANNEL_UPDATED, msg.Bytes()))
 		} else {
