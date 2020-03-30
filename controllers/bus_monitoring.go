@@ -13,7 +13,7 @@ const (
 	BUS_RESET    = true
 )
 
-var DeviceInfo *device.Info
+var DeviceInfo *device.Information
 
 func MilliAmpEstimation(c uint16) uint {
 	var ma float64

@@ -59,18 +59,20 @@ type SubscriptionList struct {
 
 func NewSubscriptionList(subs ...EventId) *SubscriptionList {
 	slist := &SubscriptionList{Items: make(map[EventId]bool)}
-	for _, e := range subs {
-		slist.Add(e)
-	}
+	slist.Add(subs...)
 	return slist
 }
 
-func (sl *SubscriptionList) Add(id EventId) {
-	sl.Items[id] = true
+func (sl *SubscriptionList) Add(subs ...EventId) {
+	for _, e := range subs {
+		sl.Items[e] = true
+	}
 }
 
-func (sl *SubscriptionList) Remove(id EventId) {
-	delete(sl.Items, id)
+func (sl *SubscriptionList) Remove(subs ...EventId) {
+	for _, e := range subs {
+		delete(sl.Items, e)
+	}
 }
 
 func (sl *SubscriptionList) Includes(id EventId) bool {
@@ -446,7 +448,7 @@ func (nu *NodeUpdateRequest) UnpackValue(b []byte) error {
 }
 
 func (nu NodeUpdateRequest) String() string {
-	return fmt.Sprintf("#%d")
+	return fmt.Sprintf("#%d", nu)
 }
 
 // NodeUpdate

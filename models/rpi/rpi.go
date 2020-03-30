@@ -112,14 +112,14 @@ func DriverReset() error {
 
 var piMasterType = [8]byte{'P', 'I', 'M', 'A', 'S', 'T', 'E', 'R'}
 
-func DriverReadDeviceInfo() (*device.Info, error) {
+func DriverReadDeviceInfo() (*device.Information, error) {
 	var buf [19]byte
 	buf[0] = SPI_OP_DEVICE_INFO
 
 	if err := SPITransfer(buf[:]); err != nil {
 		return nil, err
 	}
-	info := &device.Info{}
+	info := &device.Information{}
 	copy(info.Type[:], piMasterType[:])
 	copy(info.Signature[:], buf[1:5])
 	info.VersionMajor = buf[5]
@@ -283,7 +283,7 @@ func DriverSendCanFrame(frame can.Frame) error {
 	return nil
 }
 
-func DriverCheckSignature() (*device.Info, error) {
+func DriverCheckSignature() (*device.Information, error) {
 	info, err := DriverReadDeviceInfo()
 	if err != nil {
 		return nil, err
@@ -295,7 +295,7 @@ func DriverCheckSignature() (*device.Info, error) {
 	return nil, fmt.Errorf("Driver signature mismatch: %q", info.Signature)
 }
 
-func DriverInitialize(reset bool, speed uint) (*device.Info, error) {
+func DriverInitialize(reset bool, speed uint) (*device.Information, error) {
 	DriverReady = false
 
 	C.setup_wiring_pi()
@@ -353,7 +353,7 @@ func CanRxInterrupt() {
 	}
 
 	//clog.DebugXX("Got interrupt on RX pin")
-	clog.Warning("STATS CNT=%d LEN=%d", cnt, len(CanRxChannel))
+	//clog.Warning("STATS CNT=%d LEN=%d", cnt, len(CanRxChannel))
 }
 
 func init() {
@@ -382,6 +382,7 @@ func init() {
 
 	go func() {
 		for !DriverReady {
+			time.Sleep(10 * time.Millisecond)
 		}
 		for {
 			if C.digitalReadRx() == 0 {

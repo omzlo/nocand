@@ -20,8 +20,8 @@ const (
 )
 
 const (
-	NO_NODE    NodeId    = NodeId(-1)
-	NO_CHANNEL ChannelId = ChannelId(0xFFFF)
+	UNDEFINED_NODE    NodeId    = NodeId(-1)
+	UNDEFINED_CHANNEL ChannelId = ChannelId(0xFFFF)
 )
 
 type ChannelId uint16

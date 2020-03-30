@@ -207,6 +207,7 @@ MasterLoop:
 				clog.Info("Device %s has been registered as node N%d (fw=%d)", udid, node.Id, param)
 			}
 			node.SetAttribute("ID", strconv.Itoa(int(node.Id)))
+			node.SetAttribute("UDID", udid.String())
 
 			if nc.nodeContexts[node.Id].running {
 				// terminate existing goroutine

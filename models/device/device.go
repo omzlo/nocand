@@ -8,10 +8,10 @@ import (
 	"strings"
 )
 
-// Info
+// Information
 //
 //
-type Info struct {
+type Information struct {
 	Type         [8]byte
 	Signature    [4]byte
 	VersionMajor byte
@@ -19,7 +19,7 @@ type Info struct {
 	ChipId       [12]byte
 }
 
-func (di *Info) PackValue() ([]byte, error) {
+func (di *Information) PackValue() ([]byte, error) {
 	buf := make([]byte, 0, 26)
 	buf = append(buf, di.Type[:]...)
 	buf = append(buf, di.Signature[:]...)
@@ -29,7 +29,7 @@ func (di *Info) PackValue() ([]byte, error) {
 	return buf, nil
 }
 
-func (di *Info) UnpackValue(b []byte) error {
+func (di *Information) UnpackValue(b []byte) error {
 	if len(b) < 26 {
 		fmt.Errorf("Device info must be at least 18 bytes long, found %d", len(b))
 	}
@@ -41,7 +41,7 @@ func (di *Info) UnpackValue(b []byte) error {
 	return nil
 }
 
-func (di *Info) String() string {
+func (di *Information) String() string {
 	return fmt.Sprintf("%s, firmware version=%d.%d, signature: '%s', chip_id: '%s'",
 		string(di.Type[:]),
 		di.VersionMajor,
@@ -50,7 +50,7 @@ func (di *Info) String() string {
 		hex.EncodeToString(di.ChipId[:]))
 }
 
-func (di *Info) MarshalJSON() ([]byte, error) {
+func (di *Information) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf(`{"type":"%s","signature":"%s","version_major":"%d","version_minor":"%d","chip_id":"%s"}`,
 		string(di.Type[:]),
 		string(di.Signature[:]),
