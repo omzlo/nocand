@@ -5,8 +5,9 @@ import (
 	"github.com/omzlo/nocand/models/device"
 	"github.com/omzlo/nocand/models/nocan"
 	"github.com/omzlo/nocand/models/properties"
+	"io"
 	"net"
-    "io"
+	"time"
 )
 
 /****************************************************************************/
@@ -19,7 +20,6 @@ type EventConn struct {
 	Addr                   string
 	AuthToken              string
 	Connected              bool
-    AutoRedial             bool
 	Subscriptions          *SubscriptionList
 	onConnect              func(*EventConn) bool
 	onError                func(*EventConn, error)
@@ -37,7 +37,7 @@ func NewEventConn(addr string, auth string) *EventConn {
 	if addr == "" {
 		addr = ":4242"
 	}
-    return &EventConn{Addr: addr, AuthToken: auth, Connected: false, ConnectCount: 0, AutoRedial: false, Subscriptions: NewSubscriptionList()}
+	return &EventConn{Addr: addr, AuthToken: auth, Connected: false, Subscriptions: NewSubscriptionList()}
 }
 
 func (conn *EventConn) dial() error {
@@ -71,7 +71,6 @@ func (conn *EventConn) dial() error {
 		return err
 	}
 	conn.Connected = true
-    conn.ConnectCount++
 	return nil
 }
 
@@ -272,33 +271,6 @@ func (conn *EventConn) processError(err error) error {
 	return err
 }
 
-func (conn *EventConn) ProcessEvents() error {
-    err := processEventsStart()
-    if (err!=nil) {
-        return err
-    }
-
-    for {
-        err = processEventsMain()
-        if (err == io.EOF) && (conn.AutoRedial==true)  {
-            backoff := 1
-            for {
-                time.sleep(backoff)
-                err = processEventsStart()
-                if (err==nil) {
-                    break;
-                } else {
-                    if (backoff<64) {
-                        backoff*=2;
-                    }
-                }
-            }
-        } else {
-            return err
-        }
-    }
-}
-
 func (conn *EventConn) processEventsStart() error {
 
 	if conn.Connected == false {
@@ -311,7 +283,7 @@ func (conn *EventConn) processEventsStart() error {
 		return conn.processError(err)
 	}
 
-    return nil
+	return nil
 }
 
 func (conn *EventConn) processEventsMain() error {
@@ -411,6 +383,33 @@ func (conn *EventConn) processEventsMain() error {
 			}
 		default:
 			return fmt.Errorf("Unprocessed event %d with data %q", eid, data)
+		}
+	}
+}
+
+func (conn *EventConn) ProcessEvents(autoRedial bool) error {
+	err := conn.processEventsStart()
+	if err != nil {
+		return err
+	}
+
+	for {
+		err = conn.processEventsMain()
+		if (err == io.EOF) && (autoRedial == true) {
+			var backoff time.Duration = 1
+			for {
+				time.Sleep(backoff * time.Second)
+				err = conn.processEventsStart()
+				if err == nil {
+					break
+				} else {
+					if backoff < 64 {
+						backoff *= 2
+					}
+				}
+			}
+		} else {
+			return err
 		}
 	}
 }
