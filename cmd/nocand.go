@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-var NOCAND_VERSION string = "Undefined"
+var NocandVersion string = "Undefined"
 
 var (
 	optConfig *helpers.FilePath = config.DefaultConfigFile
@@ -109,7 +109,7 @@ func init_config() {
 		clog.Debug("No logs will be saved to file (log-file configuration option is blank).")
 	}
 
-	clog.Info("nocand version %s", NOCAND_VERSION)
+	clog.Info("nocand version %s", NocandVersion)
 }
 
 func init_pimaster() error {
@@ -213,8 +213,8 @@ func version_cmd(fs *flag.FlagSet) error {
 func main() {
 	loaded_a_config_file := ""
 
-	controllers.SystemProperties.AddString("nocand_version", NOCAND_VERSION)
-	controllers.SystemProperties.AddString("nocand_full_version", fmt.Sprintf("%s-%s-%s", NOCAND_VERSION, runtime.GOOS, runtime.GOARCH))
+	controllers.SystemProperties.AddString("nocand_version", NocandVersion)
+	controllers.SystemProperties.AddString("nocand_full_version", fmt.Sprintf("%s-%s-%s", NocandVersion, runtime.GOOS, runtime.GOARCH))
 
 	conf_opt := helpers.CheckForConfigFlag()
 	if conf_opt != nil {
