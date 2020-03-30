@@ -283,13 +283,16 @@ func DriverSendCanFrame(frame can.Frame) error {
 	return nil
 }
 
-func DriverCheckSignature() (bool, *device.Info) {
+func DriverCheckSignature() (*device.Info, error) {
 	info, err := DriverReadDeviceInfo()
 	if err != nil {
-		return false, nil
+		return nil, err
 	}
 	clog.Info(info.String())
-	return (info.Signature[0] == 'C' && info.Signature[1] == 'A' && info.Signature[2] == 'N' && info.Signature[3] == '0'), info
+	if info.Signature[0] == 'C' && info.Signature[1] == 'A' && info.Signature[2] == 'N' && info.Signature[3] == '0' {
+		return info, nil
+	}
+	return nil, fmt.Errorf("Driver signature mismatch: %q", info.Signature)
 }
 
 func DriverInitialize(reset bool, speed uint) (*device.Info, error) {
@@ -316,9 +319,9 @@ func DriverInitialize(reset bool, speed uint) (*device.Info, error) {
 	}
 	clog.DebugX("TX line is HIGH")
 
-	ok, info := DriverCheckSignature()
-	if !ok {
-		return nil, fmt.Errorf("SPI driver signature check failed.")
+	info, err := DriverCheckSignature()
+	if err != nil {
+		return nil, fmt.Errorf("SPI driver signature check failed: %s", err)
 	}
 	clog.Info("Driver signature verified.")
 	C.setup_interrupts()
