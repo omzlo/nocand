@@ -6,6 +6,7 @@ import (
 	"github.com/omzlo/nocand/models/nocan"
 	"github.com/omzlo/nocand/models/properties"
 	"net"
+    "io"
 )
 
 /****************************************************************************/
@@ -18,6 +19,7 @@ type EventConn struct {
 	Addr                   string
 	AuthToken              string
 	Connected              bool
+    AutoRedial             bool
 	Subscriptions          *SubscriptionList
 	onConnect              func(*EventConn) bool
 	onError                func(*EventConn, error)
@@ -35,7 +37,7 @@ func NewEventConn(addr string, auth string) *EventConn {
 	if addr == "" {
 		addr = ":4242"
 	}
-	return &EventConn{Addr: addr, AuthToken: auth, Connected: false, Subscriptions: NewSubscriptionList()}
+    return &EventConn{Addr: addr, AuthToken: auth, Connected: false, ConnectCount: 0, AutoRedial: false, Subscriptions: NewSubscriptionList()}
 }
 
 func (conn *EventConn) dial() error {
@@ -69,6 +71,7 @@ func (conn *EventConn) dial() error {
 		return err
 	}
 	conn.Connected = true
+    conn.ConnectCount++
 	return nil
 }
 
@@ -270,6 +273,33 @@ func (conn *EventConn) processError(err error) error {
 }
 
 func (conn *EventConn) ProcessEvents() error {
+    err := processEventsStart()
+    if (err!=nil) {
+        return err
+    }
+
+    for {
+        err = processEventsMain()
+        if (err == io.EOF) && (conn.AutoRedial==true)  {
+            backoff := 1
+            for {
+                time.sleep(backoff)
+                err = processEventsStart()
+                if (err==nil) {
+                    break;
+                } else {
+                    if (backoff<64) {
+                        backoff*=2;
+                    }
+                }
+            }
+        } else {
+            return err
+        }
+    }
+}
+
+func (conn *EventConn) processEventsStart() error {
 
 	if conn.Connected == false {
 		if err := conn.dial(); err != nil {
@@ -280,6 +310,11 @@ func (conn *EventConn) ProcessEvents() error {
 	if err := conn.Subscribe(conn.Subscriptions); err != nil {
 		return conn.processError(err)
 	}
+
+    return nil
+}
+
+func (conn *EventConn) processEventsMain() error {
 
 	if conn.onConnect != nil {
 		if conn.onConnect(conn) == false {
