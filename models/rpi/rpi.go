@@ -305,6 +305,9 @@ func DriverInitialize(reset bool, speed uint) (*device.Information, error) {
 		return nil, fmt.Errorf("Could not open SPI device")
 	}
 	clog.Info("Connected to driver using SPI interface at %d bps", speed)
+	if C.digitalReadCE0() == 0 {
+		clog.Warning("Raspberry Pi SPI pin CE0 is low, this could indicate you board is misconfigured or damaged.")
+	}
 
 	if reset {
 		clog.Info("Reseting driver")

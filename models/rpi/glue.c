@@ -9,7 +9,7 @@
 #define CAN_RX_PIN 25
 #define CAN_TX_PIN 22
 #define MCU_RESET_PIN 26 
-
+#define SPI_CE0 8
 
 int digitalReadRx(void)
 {
@@ -19,6 +19,11 @@ int digitalReadRx(void)
 int digitalReadTx(void)
 {
     return digitalRead(CAN_TX_PIN);
+}
+
+int digitalReadCE0(void)
+{
+    return digitalRead(SPI_CE0);
 }
 
 void setup_wiring_pi(void)
