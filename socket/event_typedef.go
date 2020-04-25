@@ -111,7 +111,7 @@ func EncodeToStream(w io.Writer, eid EventId, value interface{}) error {
 	dest = append(dest, PackLength(uint(len(pv)))...)
 	dest = append(dest, pv...)
 
-	//fmt.Printf("# Sending %s\n", dpacket(dest))
+	// fmt.Printf("# Sending %s\n", dpacket(dest))
 	_, err = w.Write(dest)
 	if err != nil {
 		return fmt.Errorf("Failed to write %d bytes for value of encoded event %d, %s", len(dest), eid, err)
@@ -160,7 +160,7 @@ func DecodeFromStream(r io.Reader) (EventId, []byte, error) {
 	if err != nil {
 		return 0, nil, fmt.Errorf("Expected %d bytes, but got %d bytes while decoding value for event %d (%s), %s", rlen, re, eventId, eventId, err)
 	}
-	//fmt.Printf("# Receiving %d bytes for eid=%d, %s\n", rlen, eventId, dpacket(dbuf))
+	// fmt.Printf("# Receiving %d bytes for eid=%d, %s\n", rlen, eventId, dpacket(dbuf))
 
 	return eventId, dbuf, nil
 }

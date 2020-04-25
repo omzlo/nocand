@@ -141,12 +141,12 @@ func (s *Server) DeleteClient(c *Client) bool {
 	return false
 }
 
-func (s *Server) Broadcast(eid EventId, value interface{}) {
+func (s *Server) Broadcast(eid EventId, value interface{}, exclude_client *Client) {
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 
 	for c := s.clients; c != nil; c = c.Next {
-		if c.Subscriptions.Includes(eid) {
+		if c.Subscriptions.Includes(eid) && c != exclude_client {
 			c.Put(eid, value)
 		}
 	}
