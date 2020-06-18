@@ -129,6 +129,11 @@ func init_pimaster() error {
 	if config.Settings.CurrentLimit > 0 {
 		controllers.Bus.SetCurrentLimit(uint16(config.Settings.CurrentLimit))
 	}
+
+	if !config.Settings.TerminationResistor {
+		controllers.Bus.SetTerminationResistor(false)
+	}
+
 	return nil
 }
 

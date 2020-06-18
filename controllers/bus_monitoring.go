@@ -60,3 +60,12 @@ func (nci *NocanNetworkController) SetCurrentLimit(limit uint16) {
 	rpi.DriverSetCurrentLimit(limit)
 	clog.DebugX("Driver current limit set to %d (~ %d mA)", limit, MilliAmpEstimation(limit))
 }
+
+func (nci *NocanNetworkController) SetTerminationResistor(set bool) {
+	rpi.DriverSetCanResistor(set)
+	if !set {
+		clog.Info("Termination resistor disabled.")
+	} else {
+		clog.DebugX("Termination resistor enabled (default).")
+	}
+}
