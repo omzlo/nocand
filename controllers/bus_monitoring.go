@@ -53,7 +53,7 @@ func (nc *NocanNetworkController) SetPower(power_on bool) {
 	if power_on == false {
 		Nodes.Clear()
 	}
-	EventServer.Broadcast(socket.BusPowerEvent, power_on, nil)
+	EventServer.Broadcast(socket.BusPowerEvent, socket.NewBusPower(power_on), nil)
 }
 
 func (nci *NocanNetworkController) SetCurrentLimit(limit uint16) {

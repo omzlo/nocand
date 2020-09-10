@@ -15,13 +15,13 @@ const (
 )
 
 type NodeFirmwareOperation struct {
-	Client    *socket.Client
+	Client    *socket.ClientDescriptor
 	Operation int // NODE_OP_...
 	Progress  *socket.NodeFirmwareProgress
 	Firmware  *socket.NodeFirmware
 }
 
-func NewNodeFirmwareOperation(client *socket.Client, op int, progress *socket.NodeFirmwareProgress, firmware *socket.NodeFirmware) *NodeFirmwareOperation {
+func NewNodeFirmwareOperation(client *socket.ClientDescriptor, op int, progress *socket.NodeFirmwareProgress, firmware *socket.NodeFirmware) *NodeFirmwareOperation {
 	return &NodeFirmwareOperation{Client: client, Operation: op, Progress: progress, Firmware: firmware}
 }
 
@@ -55,17 +55,17 @@ func checkDeviceSignature(node *models.Node, op *NodeFirmwareOperation) error {
 	Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_GET_SIGNATURE, 0, nil)
 	response, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_GET_SIGNATURE_ACK)
 	if err != nil {
-		op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Failed())
+		op.Client.SendAsEvent(socket.NodeFirmwareProgressEvent, op.Progress.MarkAsFailed())
 		return err
 	}
 	if response.Dlc < 4 || response.Dlc > 8 {
-		op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Failed())
+		op.Client.SendAsEvent(socket.NodeFirmwareProgressEvent, op.Progress.MarkAsFailed())
 		return fmt.Errorf("Unexpected length (%d bytes).", response.Dlc)
 	}
 	if response.Data[0] != FLASH_DEVICE_SIGNATURE[0] ||
 		response.Data[1] != FLASH_DEVICE_SIGNATURE[1] ||
 		response.Data[3] != FLASH_DEVICE_SIGNATURE[3] {
-		op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Failed())
+		op.Client.SendAsEvent(socket.NodeFirmwareProgressEvent, op.Progress.MarkAsFailed())
 		return fmt.Errorf("Unexpected value: %v", response.Bytes())
 	}
 	return nil
@@ -85,12 +85,12 @@ func uploadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 	uint32ToBytes(FLASH_APP_ORIGIN, data[:])
 	Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_SET_ADDRESS, 'F', data[:4])
 	if _, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_SET_ADDRESS_ACK); err != nil {
-		op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Failed())
+		op.Client.SendAsEvent(socket.NodeFirmwareProgressEvent, op.Progress.MarkAsFailed())
 		return fmt.Errorf("SYS_BOOTLOADER_SET_ADDRESS failed for node %s, prior to erase operation, %s", node, err)
 	}
 	Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_ERASE, 0, nil)
 	if _, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_ERASE_ACK); err != nil {
-		op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Failed())
+		op.Client.SendAsEvent(socket.NodeFirmwareProgressEvent, op.Progress.MarkAsFailed())
 		return fmt.Errorf("SYS_BOOTLOADER_ERASE failed for node %s, %s", node, err)
 	}
 	// TODO: check return code in ACK
@@ -102,7 +102,7 @@ func uploadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 			uint32ToBytes(base_address, data[:])
 			Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_SET_ADDRESS, 'F', data[:4])
 			if _, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_SET_ADDRESS_ACK); err != nil {
-				op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Failed())
+				op.Client.SendAsEvent(socket.NodeFirmwareProgressEvent, op.Progress.MarkAsFailed())
 				return fmt.Errorf("SYS_BOOTLOADER_SET_ADDRESS failed for node %s at address=0x%x, %s", node, address, err)
 			}
 
@@ -114,7 +114,7 @@ func uploadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 				crc = crc32.Update(crc, crc32.IEEETable, data[:rlen])
 				Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_WRITE, 0, data[:rlen])
 				if _, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_WRITE_ACK); err != nil {
-					op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Failed())
+					op.Client.SendAsEvent(socket.NodeFirmwareProgressEvent, op.Progress.MarkAsFailed())
 					return fmt.Errorf("SYS_BOOTLOADER_WRITE failed for node %d at address=0x%x, %s", node, address, err)
 				}
 				total_uploaded += uint32(rlen)
@@ -124,25 +124,25 @@ func uploadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 
 			response, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_WRITE_ACK)
 			if err != nil {
-				op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Failed())
+				op.Client.SendAsEvent(socket.NodeFirmwareProgressEvent, op.Progress.MarkAsFailed())
 				return fmt.Errorf("Final SYS_BOOTLOADER_WRITE failed for node %d at address=0x%x, %s", node, address, err)
 			}
 			if response.SystemParam() == 0xFF {
 				crc_r := bytesToUint32(response.Bytes())
-				op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Failed())
+				op.Client.SendAsEvent(socket.NodeFirmwareProgressEvent, op.Progress.MarkAsFailed())
 				return fmt.Errorf("SYS_BOOTLOADER_WRITE failed for node %d at address=0x%x, CRC32 mismatch, expected=%x go %x", node, address, crc, crc_r)
 			}
 
 			// TODO: check return code in ACK
-			if err := op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Update(socket.ProgressReport((page_offset*100)/blocksize), total_uploaded)); err != nil {
+			if err := op.Client.SendAsEvent(socket.NodeFirmwareProgressEvent, op.Progress.Update(socket.ProgressReport((page_offset*100)/blocksize), total_uploaded)); err != nil {
 				return err
 			}
 		}
 	}
 	Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_LEAVE, 0, nil)
 
-	op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Update(socket.ProgressReport(100), total_uploaded))
-	return op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Success())
+	op.Client.SendAsEvent(socket.NodeFirmwareProgressEvent, op.Progress.Update(socket.ProgressReport(100), total_uploaded))
+	return op.Client.SendAsEvent(socket.NodeFirmwareProgressEvent, op.Progress.MarkAsSuccess())
 }
 
 func downloadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
@@ -169,7 +169,7 @@ func downloadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 		uint32ToBytes(address, data[:])
 		Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_SET_ADDRESS, 'F', data[:4])
 		if _, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_SET_ADDRESS_ACK); err != nil {
-			op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Failed())
+			op.Client.SendAsEvent(socket.NodeFirmwareProgressEvent, op.Progress.MarkAsFailed())
 			return fmt.Errorf("NOCAN_SYS_BOOTLOADER_SET_ADDRESS failed for node %d at address=0x%x, %s", node.Id, address, err)
 		}
 
@@ -177,22 +177,22 @@ func downloadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 			Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_READ, 64, nil)
 			response, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_READ_ACK)
 			if err != nil {
-				op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Failed())
+				op.Client.SendAsEvent(socket.NodeFirmwareProgressEvent, op.Progress.MarkAsFailed())
 				return fmt.Errorf("NOCAN_SYS_BOOTLOADER_READ failed for node %d at address=0x%x, %s", node, address, err)
 			}
 
 			block = append(block, response.Bytes()...)
 			address += 64
 		}
-		if err := op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Update(socket.ProgressReport((address-FLASH_APP_ORIGIN)*100/memlength), address-FLASH_APP_ORIGIN)); err != nil {
+		if err := op.Client.SendAsEvent(socket.NodeFirmwareProgressEvent, op.Progress.Update(socket.ProgressReport((address-FLASH_APP_ORIGIN)*100/memlength), address-FLASH_APP_ORIGIN)); err != nil {
 			return err
 		}
 	}
-	op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Update(socket.ProgressReport(100), memlength))
-	op.Client.Put(socket.NodeFirmwareProgressEvent, op.Progress.Success())
+	op.Client.SendAsEvent(socket.NodeFirmwareProgressEvent, op.Progress.Update(socket.ProgressReport(100), memlength))
+	op.Client.SendAsEvent(socket.NodeFirmwareProgressEvent, op.Progress.MarkAsSuccess())
 
 	op.Firmware.AppendBlock(FLASH_APP_ORIGIN, block)
 
 	Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_LEAVE, 0, nil)
-	return op.Client.Put(socket.NodeFirmwareDownloadEvent, op.Firmware)
+	return op.Client.SendAsEvent(socket.NodeFirmwareDownloadEvent, op.Firmware)
 }

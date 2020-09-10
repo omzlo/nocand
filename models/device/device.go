@@ -19,7 +19,7 @@ type Information struct {
 	ChipId       [12]byte
 }
 
-func (di *Information) PackValue() ([]byte, error) {
+func (di *Information) Pack() ([]byte, error) {
 	buf := make([]byte, 0, 26)
 	buf = append(buf, di.Type[:]...)
 	buf = append(buf, di.Signature[:]...)
@@ -29,7 +29,7 @@ func (di *Information) PackValue() ([]byte, error) {
 	return buf, nil
 }
 
-func (di *Information) UnpackValue(b []byte) error {
+func (di *Information) Unpack(b []byte) error {
 	if len(b) < 26 {
 		fmt.Errorf("Device info must be at least 18 bytes long, found %d", len(b))
 	}
@@ -128,7 +128,7 @@ func (ps PowerStatus) String() string {
 	return fmt.Sprintf("Driver voltage=%.1f, current sense=%d, reference voltage=%.2f, status(%x)=%s.", ps.Voltage, ps.CurrentSense, ps.RefLevel, byte(ps.Status), ps.Status)
 }
 
-func (ps *PowerStatus) PackValue() ([]byte, error) {
+func (ps *PowerStatus) Pack() ([]byte, error) {
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.BigEndian, ps)
 	if err != nil {
@@ -137,7 +137,7 @@ func (ps *PowerStatus) PackValue() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (ps *PowerStatus) UnpackValue(b []byte) error {
+func (ps *PowerStatus) Unpack(b []byte) error {
 	buf := bytes.NewReader(b)
 	err := binary.Read(buf, binary.BigEndian, ps)
 	if err != nil {

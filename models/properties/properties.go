@@ -83,7 +83,7 @@ func (si *Properties) AsString(k string) string {
 	return ""
 }
 
-func (si *Properties) PackValue() ([]byte, error) {
+func (si *Properties) Pack() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	for key, prop := range si.Properties {
@@ -113,7 +113,7 @@ func (si *Properties) PackValue() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (si *Properties) UnpackValue(b []byte) error {
+func (si *Properties) Unpack(b []byte) error {
 	var len byte
 	var ptype byte
 	var err error

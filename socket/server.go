@@ -3,80 +3,70 @@ package socket
 import (
 	"fmt"
 	"github.com/omzlo/clog"
+	"github.com/omzlo/go-sscp"
+	"github.com/omzlo/nocand/models/nocan"
 	"io"
-	"net"
 	"sync"
 )
 
 /****************************************************************************/
 
-// Client represents a single connection from an external client through TCP/IP
+// ClientDescriptor represents a single connection from an external client through TCP/IP
 //
 //
-type Client struct {
+type ClientDescriptor struct {
 	Id              uint
 	Server          *Server
-	Conn            net.Conn
+	Conn            *sscp.Conn
 	OutputChan      chan *Event
 	TerminationChan chan bool
-	Subscriptions   *SubscriptionList
-	Authenticated   bool
+	Subscriptions   *ChannelSubscriptionList
 	Connected       bool
-	Next            *Client
+	Next            *ClientDescriptor
 }
 
-func (c *Client) String() string {
+func (c *ClientDescriptor) Name() string {
 	return fmt.Sprintf("%d (%s)", c.Id, c.Conn.RemoteAddr())
 }
 
-func (c *Client) Put(eid EventId, value interface{}) error {
+func (c *ClientDescriptor) SendEvent(event *Event) error {
 	if !c.Connected {
 		return fmt.Errorf("Put failed, client %s is not connected", c)
 	}
-	c.OutputChan <- NewEvent(eid, value)
+	c.OutputChan <- event
 	return nil
 }
 
-func (c *Client) Get() (EventId, []byte, error) {
+func (c *ClientDescriptor) SendAsEvent(eid EventId, value Packer) error {
+	return c.SendEvent(NewEvent(0, eid, value))
+}
+
+func (c *ClientDescriptor) RespondToEvent(event *Event, eid EventId, value Packer) error {
+	e := NewEvent(event.MsgId, eid, value)
+	return c.SendEvent(e)
+}
+
+/*
+func (c *ClientDescriptor) ReceiveEvent() (*Event, error) {
 	if !c.Connected {
-		return NoEvent, nil, fmt.Errorf("Get failed, client %s is not connected", c)
+		return nil, fmt.Errorf("Get failed, client %s is not connected", c)
 	}
 
-	eid, value, err := DecodeFromStream(c.Conn)
+	event := new(Event)
+	_, err := event.ReadFrom(c.Conn)
 	if err != nil {
-		//c.TerminationChan <- true
-		return NoEvent, nil, err
+		return nil, err
 	}
-	return eid, value, err
+	return event, nil
 }
+*/
 
-func clientAuthHandler(c *Client, eid EventId, value []byte) error {
-	var auth Authenticator
+func clientSubscribeHandler(c *ClientDescriptor, event *Event) error {
+	sl := event.Value.(*ChannelSubscriptionList)
 
-	if err := auth.UnpackValue(value); err != nil {
-		return err
-	}
-	if string(auth) == c.Server.AuthToken {
-		c.Authenticated = true
-		clog.Info("Client %s successfully authenticated", c)
-		return c.Put(ServerAckEvent, SERVER_ACK_SUCCESS)
-	}
-	clog.Info("Client %s failed to authenticate using key '%s'", c, auth)
-	return c.Put(ServerAckEvent, SERVER_ACK_UNAUTHORIZED)
-}
-
-func clientSubscribeHandler(c *Client, eid EventId, value []byte) error {
-	sl := NewSubscriptionList()
-
-	if err := sl.UnpackValue(value); err != nil {
-		return err
-	}
 	c.Subscriptions = sl
-	return c.Put(ServerAckEvent, SERVER_ACK_SUCCESS)
-}
 
-func clientHelloHandler(c *Client, eid EventId, value []byte) error {
-	return c.Put(ServerHelloEvent, []byte{'E', 'M', 1, 0})
+	return c.RespondToEvent(event, ServerAckEvent, ServerAckSuccess)
 }
 
 /****************************************************************************/
@@ -85,26 +75,26 @@ func clientHelloHandler(c *Client, eid EventId, value []byte) error {
 //
 //
 
-type EventHandler func(*Client, EventId, []byte) error
+type EventHandler func(*ClientDescriptor, *Event) error
 
 type Server struct {
 	Mutex     sync.Mutex
 	AuthToken string
 	topId     uint
-	ls        net.Listener
-	clients   *Client
+	ls        *sscp.Listener
+	clients   *ClientDescriptor
 	handlers  map[EventId]EventHandler
 }
 
 func NewServer() *Server {
 	s := &Server{handlers: make(map[EventId]EventHandler)}
-	registerEventHandlers(s)
+	s.RegisterHandler(ChannelSubscribeEvent, clientSubscribeHandler)
 	return s
 }
 
-func (s *Server) NewClient(conn net.Conn) *Client {
-	c := new(Client)
-	c.Subscriptions = NewSubscriptionList()
+func (s *Server) NewClient(conn *sscp.Conn) *ClientDescriptor {
+	c := new(ClientDescriptor)
+	c.Subscriptions = NewChannelSubscriptionList()
 	c.Server = s
 	c.Conn = conn
 	// TODO: move this next line after mutex.lock
@@ -121,7 +111,7 @@ func (s *Server) NewClient(conn net.Conn) *Client {
 	return c
 }
 
-func (s *Server) DeleteClient(c *Client) bool {
+func (s *Server) DeleteClient(c *ClientDescriptor) bool {
 	c.Connected = false
 	c.Conn.Close()
 	//close(c.OutputChan)
@@ -141,13 +131,23 @@ func (s *Server) DeleteClient(c *Client) bool {
 	return false
 }
 
-func (s *Server) Broadcast(eid EventId, value interface{}, exclude_client *Client) {
+func (s *Server) Broadcast(eid EventId, value Packer, exclude_client *ClientDescriptor) {
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 
+	event := NewEvent(0, eid, value)
+
 	for c := s.clients; c != nil; c = c.Next {
-		if c.Subscriptions.Includes(eid) && c != exclude_client {
-			c.Put(eid, value)
+		if c == exclude_client {
+			continue
+		}
+		if event.Id == ChannelUpdateEvent {
+			channel_update := event.Value.(*ChannelUpdate)
+			if c.Subscriptions.Includes(channel_update.Id) || c.Subscriptions.Includes(nocan.UNDEFINED_CHANNEL) {
+				c.SendEvent(event)
+			}
+		} else {
+			c.SendEvent(event)
 		}
 	}
 }
@@ -166,12 +166,12 @@ func dumpValue(value []byte) string {
 	return fmt.Sprintf("%q", value)
 }
 
-func (s *Server) runClient(c *Client) {
+func (s *Server) runClient(c *ClientDescriptor) {
 	go func() {
 		for {
 			select {
 			case event := <-c.OutputChan:
-				if err := EncodeToStream(c.Conn, event.Id, event.Value); err != nil {
+				if _, err := event.WriteTo(c.Conn); err != nil {
 					clog.Warning("Client %s: %s", c, err)
 					c.TerminationChan <- true
 				}
@@ -183,7 +183,9 @@ func (s *Server) runClient(c *Client) {
 	}()
 
 	for {
-		eid, value, err := c.Get()
+		event := new(Event)
+		_, err := event.ReadFrom(c.Conn)
+
 		if err != nil {
 			if err == io.EOF {
 				clog.Info("Client %s closed connection", c)
@@ -193,20 +195,16 @@ func (s *Server) runClient(c *Client) {
 			break
 		}
 
-		clog.DebugX("Processing event %s(%d) from client %s, with %d bytes of payload", eid, eid, c, len(value))
+		clog.DebugX("Processing event %s(%d) from client %s", event.Id, event.Id, c)
 
-		handler := s.handlers[eid]
+		handler := s.handlers[event.Id]
 		if handler != nil {
-			if !c.Authenticated && eid != ClientAuthEvent && eid != ClientHelloEvent {
-				c.Put(ServerAckEvent, SERVER_ACK_UNAUTHORIZED)
-				break
-			}
-			if err = handler(c, eid, value); err != nil {
-				clog.Error("Handler for event %s(%d) failed: %s, value=%s", eid, eid, err, dumpValue(value))
+			if err = handler(c, event); err != nil {
+				clog.Error("Handler for event %s(%d) failed: %s", event.Id, event.Id, err)
 				break
 			}
 		} else {
-			clog.Warning("No handler found for event id %d", eid)
+			clog.Warning("No handler found for event id %d", event.Id)
 			break
 		}
 	}
@@ -214,15 +212,13 @@ func (s *Server) runClient(c *Client) {
 }
 
 func (s *Server) ListenAndServe(addr string, auth_token string) error {
-	ls, err := net.Listen("tcp", addr)
+	ls, err := sscp.Listen("tcp", addr, []byte("nocand"), []byte(auth_token))
 	if err != nil {
 		return err
 	}
 
 	clog.Info("Listening for clients at %s", ls.Addr())
 	s.ls = ls
-
-	s.AuthToken = auth_token
 
 	go func() {
 		for {
@@ -231,7 +227,7 @@ func (s *Server) ListenAndServe(addr string, auth_token string) error {
 				clog.Error("Server could not accept connection: %s", err)
 			} else {
 				client := s.NewClient(conn)
-				clog.Debug("Created new client %s", client)
+				clog.Debug("Created and authenticated new client %s", client)
 				go s.runClient(client)
 			}
 		}

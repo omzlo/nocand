@@ -6,10 +6,20 @@ import (
 	"fmt"
 	"github.com/omzlo/nocand/models"
 	"github.com/omzlo/nocand/models/nocan"
+	"strconv"
 	"time"
 )
 
 var ErrorMissingData error = errors.New("Missing data for value decoder")
+
+func EncodeUint16(dest []byte, u uint16) {
+	dest[0] = byte(u >> 8)
+	dest[1] = byte(u)
+}
+
+func DecodeUint16(src []byte) uint16 {
+	return (uint16(src[0]) << 8) | uint16(src[1])
+}
 
 func EncodeUint32(dest []byte, u uint32) {
 	dest[0] = byte(u >> 24)
@@ -48,86 +58,142 @@ func DecodeUint64(src []byte) uint64 {
 }
 
 /****************************************************************************/
+// EmptyRequest
 
-// SubscriptionList represents the list of events that a client will receive.
-// It also serves as the value of the ClientSubscriptionEvent, so it implements
-// the ValuePacker interface
+type EmptyRequest struct{}
+
+func (x EmptyRequest) Pack() ([]byte, error) {
+	return make([]byte, 0), nil
+}
+
+func (c *EmptyRequest) Unpack(b []byte) error {
+	return nil
+}
+
+/****************************************************************************/
+
+type ClientHello struct {
+	Tool         string
+	VersionMajor byte
+	VersionMinor byte
+}
+
+func NewClientHello(tool string, major byte, minor byte) *ClientHello {
+	return &ClientHello{tool, major, minor}
+}
+
+func (ch *ClientHello) Pack() ([]byte, error) {
+	b := make([]byte, len(ch.Tool)+3, 0)
+	b = append(b, byte(len(ch.Tool)))
+	b = append(b, []byte(ch.Tool)...)
+	b = append(b, ch.VersionMajor)
+	b = append(b, ch.VersionMinor)
+	return b, nil
+}
+
+func (ch *ClientHello) Unpack(b []byte) error {
+	if int(b[0]+2) > len(b) {
+		return ErrorMissingData
+	}
+	ch.Tool = string(b[1 : 1+b[0]])
+	ch.VersionMajor = b[b[0]]
+	ch.VersionMinor = b[b[0]+1]
+	return nil
+}
+
+/****************************************************************************/
+
+type ServerHello struct {
+	ClientHello
+}
+
+func NewServerHello(tool string, major byte, minor byte) *ServerHello {
+	return &ServerHello{ClientHello{tool, major, minor}}
+}
+
+/****************************************************************************/
+// ChannelSubscriptionList represents the list of channels that a client will receive.
 //
-type SubscriptionList struct {
-	Items map[EventId]bool
+
+type ChannelSubscriptionList struct {
+	Channels map[nocan.ChannelId]bool
 }
 
-func NewSubscriptionList(subs ...EventId) *SubscriptionList {
-	slist := &SubscriptionList{Items: make(map[EventId]bool)}
-	slist.Add(subs...)
-	return slist
+func NewChannelSubscriptionList(chans ...nocan.ChannelId) *ChannelSubscriptionList {
+	clist := &ChannelSubscriptionList{Channels: make(map[nocan.ChannelId]bool)}
+	clist.Add(chans...)
+	return clist
 }
 
-func (sl *SubscriptionList) Add(subs ...EventId) {
-	for _, e := range subs {
-		sl.Items[e] = true
+func (sl *ChannelSubscriptionList) Add(chans ...nocan.ChannelId) {
+	for _, e := range chans {
+		sl.Channels[e] = true
 	}
 }
 
-func (sl *SubscriptionList) Remove(subs ...EventId) {
-	for _, e := range subs {
-		delete(sl.Items, e)
+func (sl *ChannelSubscriptionList) Remove(chans ...nocan.ChannelId) {
+	for _, e := range chans {
+		delete(sl.Channels, e)
 	}
 }
 
-func (sl *SubscriptionList) Includes(id EventId) bool {
-	return sl.Items[id]
+func (sl *ChannelSubscriptionList) Includes(id nocan.ChannelId) bool {
+	return sl.Channels[id]
 }
 
-func (sl *SubscriptionList) PackValue() ([]byte, error) {
-	p := make([]byte, len(sl.Items))
+func (sl *ChannelSubscriptionList) Pack() ([]byte, error) {
+	p := make([]byte, len(sl.Channels)*2)
 
 	i := 0
-	for k, _ := range sl.Items {
-		p[i] = byte(k)
-		i++
+	for k, _ := range sl.Channels {
+		EncodeUint16(p[i:], uint16(k))
+		i += 2
 	}
 	return p, nil
 }
 
-func (sl *SubscriptionList) UnpackValue(b []byte) error {
-	for _, x := range b {
-		sl.Add(EventId(x))
+func (sl *ChannelSubscriptionList) Unpack(b []byte) error {
+	for i := 0; i < len(b); i += 2 {
+		x := nocan.ChannelId(DecodeUint16(b[i:]))
+		sl.Add(x)
 	}
 	return nil
 }
 
-/****************************************************************************/
+func (sl *ChannelSubscriptionList) String() string {
+	s := "["
 
-// Authenticator
-//
-//
-type Authenticator string
-
-func (a Authenticator) PackValue() ([]byte, error) {
-	return []byte(a), nil
+	var i int = 0
+	for k, _ := range sl.Channels {
+		if k == nocan.UNDEFINED_CHANNEL {
+			s += "*"
+		} else {
+			s += strconv.Itoa(int(k))
+		}
+		if i < len(sl.Channels)-1 {
+			s += ", "
+		}
+		i++
+	}
+	return s + "]"
 }
 
-func (a *Authenticator) UnpackValue(b []byte) error {
-	*a = Authenticator(b)
-	return nil
-}
-
 /****************************************************************************/
-
 // ServerAck
 //
 //
 
-type ServerAck byte
+type ServerAck struct {
+	Code byte
+}
 
-const (
-	SERVER_ACK_SUCCESS ServerAck = iota
-	SERVER_ACK_BAD_REQUEST
-	SERVER_ACK_UNAUTHORIZED
-	SERVER_ACK_NOT_FOUND
-	SERVER_ACK_GENERAL_FAILURE
-	SERVER_ACK_UNKNOWN
+var (
+	ServerAckSuccess        = NewServerAck(0)
+	ServerAckBadRequest     = NewServerAck(1)
+	ServerAckUnauthorized   = NewServerAck(2)
+	ServerAckNotFound       = NewServerAck(3)
+	ServerAckGeneralFailure = NewServerAck(4)
+	ServerAckUnknown        = NewServerAck(5)
 )
 
 var serverAckStrings = [5]string{
@@ -146,38 +212,42 @@ var (
 	ErrorServerAckUnknown        = errors.New("Unknown error")
 )
 
-func (sa ServerAck) PackValue() ([]byte, error) {
+func NewServerAck(val byte) *ServerAck {
+	return &ServerAck{val}
+}
+
+func (sa *ServerAck) Pack() ([]byte, error) {
 	p := make([]byte, 1)
-	p[0] = byte(sa)
+	p[0] = sa.Code
 	return p, nil
 }
 
-func (sa *ServerAck) UnpackValue(value []byte) error {
+func (sa *ServerAck) Unpack(value []byte) error {
 	if len(value) < 1 {
 		return ErrorMissingData
 	}
-	*sa = ServerAck(value[0])
+	sa.Code = value[0]
 	return nil
 }
 
 func (sa ServerAck) String() string {
-	if sa < 5 {
-		return serverAckStrings[sa]
+	if sa.Code < 5 {
+		return serverAckStrings[sa.Code]
 	}
 	return "Unknown error"
 }
 
 func (sa ServerAck) ToError() error {
-	switch sa {
-	case SERVER_ACK_SUCCESS:
+	switch sa.Code {
+	case 0:
 		return nil
-	case SERVER_ACK_BAD_REQUEST:
+	case 1:
 		return ErrorServerAckBadRequest
-	case SERVER_ACK_UNAUTHORIZED:
+	case 2:
 		return ErrorServerAckUnauthorized
-	case SERVER_ACK_NOT_FOUND:
+	case 3:
 		return ErrorServerAckNotFound
-	case SERVER_ACK_GENERAL_FAILURE:
+	case 4:
 		return ErrorServerAckGeneralFailure
 	}
 	return ErrorServerAckUnknown
@@ -202,7 +272,7 @@ func (cu *ChannelUpdateRequest) PackedLength() int {
 	return len(cu.Name) + 3
 }
 
-func (cu *ChannelUpdateRequest) PackValue() ([]byte, error) {
+func (cu *ChannelUpdateRequest) Pack() ([]byte, error) {
 	buf := make([]byte, 0, cu.PackedLength())
 	buf = append(buf, byte(cu.Id>>8), byte(cu.Id&0xFF))
 	buf = append(buf, byte(len(cu.Name)))
@@ -210,7 +280,7 @@ func (cu *ChannelUpdateRequest) PackValue() ([]byte, error) {
 	return buf, nil
 }
 
-func (cu *ChannelUpdateRequest) UnpackValue(value []byte) error {
+func (cu *ChannelUpdateRequest) Unpack(value []byte) error {
 	if len(value) < 3 {
 		return ErrorMissingData
 	}
@@ -301,7 +371,7 @@ func (cu *ChannelUpdate) PackedLength() int {
 	return len(cu.Name) + len(cu.Value) + 5
 }
 
-func (cu *ChannelUpdate) PackValue() ([]byte, error) {
+func (cu *ChannelUpdate) Pack() ([]byte, error) {
 	buf := make([]byte, 0, cu.PackedLength())
 	buf = append(buf, byte(cu.Status))
 	buf = append(buf, byte(cu.Id>>8), byte(cu.Id&0xFF))
@@ -314,7 +384,7 @@ func (cu *ChannelUpdate) PackValue() ([]byte, error) {
 	return buf, nil
 }
 
-func (cu *ChannelUpdate) UnpackValue(value []byte) error {
+func (cu *ChannelUpdate) Unpack(value []byte) error {
 	if len(value) < 3 {
 		return ErrorMissingData
 	}
@@ -367,7 +437,9 @@ func (cu ChannelUpdate) String() string {
 //
 //
 
-/* Channel list request is an empty event */
+type ChannelListRequest struct {
+	EmptyRequest
+}
 
 // ChannelList
 //
@@ -384,14 +456,14 @@ func (cl *ChannelList) Append(cu *ChannelUpdate) {
 	cl.Channels = append(cl.Channels, cu)
 }
 
-func (cl *ChannelList) PackValue() ([]byte, error) {
+func (cl *ChannelList) Pack() ([]byte, error) {
 	alloc := 0
 	for _, cu := range cl.Channels {
 		alloc += cu.PackedLength()
 	}
 	b := make([]byte, 0, alloc)
 	for _, cu := range cl.Channels {
-		packed, err := cu.PackValue()
+		packed, err := cu.Pack()
 		if err == nil {
 			b = append(b, packed...)
 		} else {
@@ -401,15 +473,15 @@ func (cl *ChannelList) PackValue() ([]byte, error) {
 	return b, nil
 }
 
-func (cl *ChannelList) UnpackValue(b []byte) error {
+func (cl *ChannelList) Unpack(b []byte) error {
 	cl.Channels = make([]*ChannelUpdate, 0, 8)
 
 	for {
 		if len(b) == 0 {
 			break
 		}
-		cu := &ChannelUpdate{}
-		err := cu.UnpackValue(b)
+		cu := new(ChannelUpdate)
+		err := cu.Unpack(b)
 		if err != nil {
 			return err
 		}
@@ -431,24 +503,30 @@ func (cl ChannelList) String() string {
 //
 //
 
-type NodeUpdateRequest nocan.NodeId
+type NodeUpdateRequest struct {
+	NodeId nocan.NodeId
+}
 
-func (nu NodeUpdateRequest) PackValue() ([]byte, error) {
+func NewNodeUpdateRequest(node_id nocan.NodeId) *NodeUpdateRequest {
+	return &NodeUpdateRequest{node_id}
+}
+
+func (nu NodeUpdateRequest) Pack() ([]byte, error) {
 	b := make([]byte, 1)
-	b[0] = byte(nu)
+	b[0] = byte(nu.NodeId)
 	return b, nil
 }
 
-func (nu *NodeUpdateRequest) UnpackValue(b []byte) error {
+func (nu *NodeUpdateRequest) Unpack(b []byte) error {
 	if len(b) < 1 {
 		return ErrorMissingData
 	}
-	*nu = NodeUpdateRequest(b[0])
+	nu.NodeId = nocan.NodeId(b[0])
 	return nil
 }
 
 func (nu NodeUpdateRequest) String() string {
-	return fmt.Sprintf("#%d", nu)
+	return fmt.Sprintf("#%d", nu.NodeId)
 }
 
 // NodeUpdate
@@ -468,7 +546,7 @@ func NewNodeUpdate(id nocan.NodeId, state models.NodeState, udid models.Udid8, l
 	return nu
 }
 
-func (nu *NodeUpdate) PackValue() ([]byte, error) {
+func (nu *NodeUpdate) Pack() ([]byte, error) {
 	b := make([]byte, 18)
 	b[0] = byte(nu.Id)
 	b[1] = byte(nu.State)
@@ -477,7 +555,7 @@ func (nu *NodeUpdate) PackValue() ([]byte, error) {
 	return b, nil
 }
 
-func (nu *NodeUpdate) UnpackValue(b []byte) error {
+func (nu *NodeUpdate) Unpack(b []byte) error {
 	if len(b) < 18 {
 		return ErrorMissingData
 	}
@@ -509,23 +587,23 @@ func (nl *NodeList) Append(nu *NodeUpdate) {
 	nl.Nodes = append(nl.Nodes, nu)
 }
 
-func (nl *NodeList) PackValue() ([]byte, error) {
+func (nl *NodeList) Pack() ([]byte, error) {
 	b := make([]byte, 0, len(nl.Nodes)*18)
 	for _, nu := range nl.Nodes {
-		sb, _ := nu.PackValue()
+		sb, _ := nu.Pack()
 		b = append(b, sb...)
 	}
 	return b, nil
 }
 
-func (nl *NodeList) UnpackValue(b []byte) error {
+func (nl *NodeList) Unpack(b []byte) error {
 	nl.Nodes = make([]*NodeUpdate, 0, 8)
 	for {
 		if len(b) == 0 {
 			break
 		}
 		nu := &NodeUpdate{}
-		if err := nu.UnpackValue(b); err != nil {
+		if err := nu.Unpack(b); err != nil {
 			return err
 		}
 		nl.Append(nu)
@@ -540,6 +618,22 @@ func (nl NodeList) String() string {
 		resp += nu.String() + "\n"
 	}
 	return resp
+}
+
+// NodeListRequest
+//
+//
+
+type NodeListRequest struct {
+	EmptyRequest
+}
+
+// NodeFirmwareDownloadRequest
+//
+//
+
+type NodeFirmwareDownloadRequest struct {
+	EmptyRequest
 }
 
 // FirmwareBlock
@@ -570,7 +664,7 @@ func (nf *NodeFirmware) AppendBlock(offset uint32, data []byte) {
 	nf.Code = append(nf.Code, fb)
 }
 
-func (nf *NodeFirmware) PackValue() ([]byte, error) {
+func (nf *NodeFirmware) Pack() ([]byte, error) {
 	tlen := 6
 	for _, block := range nf.Code {
 		tlen += 8 + len(block.Data)
@@ -595,7 +689,7 @@ func (nf *NodeFirmware) PackValue() ([]byte, error) {
 	return b, nil
 }
 
-func (nf *NodeFirmware) UnpackValue(b []byte) error {
+func (nf *NodeFirmware) Unpack(b []byte) error {
 	if len(b) < 2 {
 		return ErrorMissingData
 	}
@@ -666,15 +760,15 @@ func (nfp *NodeFirmwareProgress) Update(progress ProgressReport, transferred uin
 	return &NodeFirmwareProgress{Id: nfp.Id, Progress: progress, BytesTransferred: transferred}
 }
 
-func (nfp *NodeFirmwareProgress) Failed() *NodeFirmwareProgress {
+func (nfp *NodeFirmwareProgress) MarkAsFailed() *NodeFirmwareProgress {
 	return nfp.Update(ProgressFailed, 0)
 }
 
-func (nfp *NodeFirmwareProgress) Success() *NodeFirmwareProgress {
+func (nfp *NodeFirmwareProgress) MarkAsSuccess() *NodeFirmwareProgress {
 	return nfp.Update(ProgressSuccess, 0)
 }
 
-func (nfp *NodeFirmwareProgress) PackValue() ([]byte, error) {
+func (nfp *NodeFirmwareProgress) Pack() ([]byte, error) {
 	b := make([]byte, 6)
 	b[0] = byte(nfp.Id)
 	b[1] = byte(nfp.Progress)
@@ -682,7 +776,7 @@ func (nfp *NodeFirmwareProgress) PackValue() ([]byte, error) {
 	return b, nil
 }
 
-func (nfp *NodeFirmwareProgress) UnpackValue(b []byte) error {
+func (nfp *NodeFirmwareProgress) Unpack(b []byte) error {
 	if len(b) < 6 {
 		return ErrorMissingData
 	}
@@ -692,15 +786,21 @@ func (nfp *NodeFirmwareProgress) UnpackValue(b []byte) error {
 	return nil
 }
 
-//
+// BusPower
 //
 //
 
-type BusPower bool
+type BusPower struct {
+	PowerOn bool
+}
 
-func (bp BusPower) PackValue() ([]byte, error) {
+func NewBusPower(power_on bool) *BusPower {
+	return &BusPower{power_on}
+}
+
+func (bp BusPower) Pack() ([]byte, error) {
 	b := make([]byte, 1)
-	if bp {
+	if bp.PowerOn {
 		b[0] = 1
 	} else {
 		b[0] = 0
@@ -708,16 +808,28 @@ func (bp BusPower) PackValue() ([]byte, error) {
 	return b, nil
 }
 
-func (bp *BusPower) UnpackValue(b []byte) error {
+func (bp *BusPower) Unpack(b []byte) error {
 	if len(b) != 1 {
 		return ErrorMissingData
 	}
-	if b[0] == 0 {
-		*bp = false
-	} else {
-		*bp = true
-	}
+	bp.PowerOn = (b[0] == 0)
 	return nil
+}
+
+//
+//
+//
+
+type BusPowerStatusUpdateRequest struct {
+	EmptyRequest
+}
+
+type DeviceInformationRequest struct {
+	EmptyRequest
+}
+
+type SystemPropertiesRequest struct {
+	EmptyRequest
 }
 
 //
@@ -741,13 +853,13 @@ func (nr NodeRebootRequest) Force() bool {
 	return (nr & 128) != 0
 }
 
-func (nr NodeRebootRequest) PackValue() ([]byte, error) {
+func (nr NodeRebootRequest) Pack() ([]byte, error) {
 	b := make([]byte, 1)
 	b[0] = byte(nr)
 	return b, nil
 }
 
-func (nr *NodeRebootRequest) UnpackValue(b []byte) error {
+func (nr *NodeRebootRequest) Unpack(b []byte) error {
 	if len(b) != 1 {
 		return ErrorMissingData
 	}
@@ -760,10 +872,10 @@ func (nr *NodeRebootRequest) UnpackValue(b []byte) error {
 const (
 	NoEvent                          EventId = 0
 	ClientHelloEvent                         = 1
-	ClientAuthEvent                          = 2
-	ClientSubscribeEvent                     = 3
+	ServerHelloEvent                         = 2
+	ChannelSubscribeEvent                    = 3
 	ServerAckEvent                           = 4
-	ServerHelloEvent                         = 5
+	Reserved5Event                           = 5
 	BusPowerStatusUpdateEvent                = 6
 	BusPowerEvent                            = 7
 	ChannelUpdateRequestEvent                = 8
@@ -790,10 +902,10 @@ const (
 var EventNames = [EventCount]string{
 	"no-event",
 	"client-hello-event",
-	"client-auth-event",
-	"client-subscribe-event",
-	"server-ack-event",
 	"server-hello-event",
+	"channel-subscribe-event",
+	"server-ack-event",
+	"reserved5-event",
 	"bus-power-status-update-event",
 	"bus-power-event",
 	"channel-update-request-event",
@@ -827,12 +939,6 @@ func (eid EventId) String() string {
 		return EventNames[eid]
 	}
 	return "unknown-event"
-}
-
-func registerEventHandlers(s *Server) {
-	s.RegisterHandler(ClientHelloEvent, clientHelloHandler)
-	s.RegisterHandler(ClientAuthEvent, clientAuthHandler)
-	s.RegisterHandler(ClientSubscribeEvent, clientSubscribeHandler)
 }
 
 func init() {
