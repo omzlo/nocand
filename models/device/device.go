@@ -1,8 +1,6 @@
 package device
 
 import (
-	"bytes"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -17,28 +15,6 @@ type Information struct {
 	VersionMajor byte
 	VersionMinor byte
 	ChipId       [12]byte
-}
-
-func (di *Information) Pack() ([]byte, error) {
-	buf := make([]byte, 0, 26)
-	buf = append(buf, di.Type[:]...)
-	buf = append(buf, di.Signature[:]...)
-	buf = append(buf, di.VersionMajor)
-	buf = append(buf, di.VersionMinor)
-	buf = append(buf, di.ChipId[:]...)
-	return buf, nil
-}
-
-func (di *Information) Unpack(b []byte) error {
-	if len(b) < 26 {
-		fmt.Errorf("Device info must be at least 18 bytes long, found %d", len(b))
-	}
-	copy(di.Type[:], b[0:8])
-	copy(di.Signature[:], b[8:12])
-	di.VersionMajor = b[12]
-	di.VersionMinor = b[13]
-	copy(di.ChipId[:], b[14:26])
-	return nil
 }
 
 func (di *Information) String() string {
@@ -122,26 +98,4 @@ type PowerStatus struct {
 	Voltage      float32    `json:"voltage"`
 	CurrentSense uint16     `json:"current_sense"`
 	RefLevel     float32    `json:"reference_voltage"`
-}
-
-func (ps PowerStatus) String() string {
-	return fmt.Sprintf("Driver voltage=%.1f, current sense=%d, reference voltage=%.2f, status(%x)=%s.", ps.Voltage, ps.CurrentSense, ps.RefLevel, byte(ps.Status), ps.Status)
-}
-
-func (ps *PowerStatus) Pack() ([]byte, error) {
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, ps)
-	if err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-func (ps *PowerStatus) Unpack(b []byte) error {
-	buf := bytes.NewReader(b)
-	err := binary.Read(buf, binary.BigEndian, ps)
-	if err != nil {
-		return err
-	}
-	return nil
 }

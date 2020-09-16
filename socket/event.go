@@ -1,31 +1,43 @@
 package socket
 
 import (
-	//"encoding/hex"
 	"fmt"
-	"github.com/omzlo/nocand/models/device"
-	"github.com/omzlo/nocand/models/properties"
 	"io"
 )
 
 type EventId byte
 
-type Packer interface {
+type Eventer interface {
+	Id() EventId
+	MsgId() uint16
+	SetMsgId(uint16)
 	Pack() ([]byte, error)
 	Unpack([]byte) error
+	String() string
 }
 
 // Event
 //
 //
-type Event struct {
-	MsgId uint16
-	Id    EventId
-	Value Packer
+type BaseEvent struct {
+	msgId   uint16
+	eventId EventId
 }
 
-func NewEvent(msg_id uint16, eid EventId, value Packer) *Event {
-	return &Event{MsgId: msg_id, Id: eid, Value: value}
+func (e BaseEvent) Id() EventId {
+	return e.eventId
+}
+
+func (e BaseEvent) MsgId() uint16 {
+	return e.msgId
+}
+
+func (e *BaseEvent) SetMsgId(mid uint16) {
+	e.msgId = mid
+}
+
+func (e BaseEvent) String() string {
+	return fmt.Sprintf("%s(%d)", e.eventId, e.eventId)
 }
 
 //
@@ -65,38 +77,37 @@ func packLength(size uint) []byte {
 	return dest
 }
 
-func (e *Event) WriteTo(w io.Writer) (int64, error) {
+func EncodeEvent(w io.Writer, e Eventer) error {
 	var pv []byte
 	var err error
 
-	pv, err = e.Value.Pack()
+	pv, err = e.Pack()
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	dest := make([]byte, 0, 8+len(pv)) // prealloc
-	dest = append(dest, byte(e.MsgId>>8))
-	dest = append(dest, byte(e.MsgId))
-	dest = append(dest, byte(e.Id))
+	dest = append(dest, byte(e.MsgId()>>8))
+	dest = append(dest, byte(e.MsgId()))
+	dest = append(dest, byte(e.Id()))
 	dest = append(dest, packLength(uint(len(pv)))...)
 	dest = append(dest, pv...)
 
 	_, err = w.Write(dest)
 	if err != nil {
-		return 0, fmt.Errorf("Failed to write %d bytes for value of encoded event %d, %s", len(dest), e.Id, err)
+		return fmt.Errorf("Failed to write %d bytes for value of encoded event %d, %s", len(dest), e.Id, err)
 	}
-	return int64(len(dest)), nil
+	return nil
 }
 
-func (e *Event) ReadFrom(r io.Reader) (int64, error) {
+func DecodeEvent(r io.Reader) (Eventer, error) {
 	var rbuf [4]byte
 	var err error
 	var rlen uint
-	var len_of_len uint
 
 	_, err = io.ReadFull(r, rbuf[:])
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	msgId := uint16(rbuf[1]<<8) | uint16(rbuf[0])
@@ -104,13 +115,11 @@ func (e *Event) ReadFrom(r io.Reader) (int64, error) {
 
 	if rbuf[3] <= 0x80 {
 		rlen = uint(rbuf[3])
-		len_of_len = 1
 	} else {
 		switch rbuf[3] & 0xF {
 		case 1:
 			_, err = io.ReadFull(r, rbuf[:1])
 			rlen = uint(rbuf[0])
-			len_of_len = 2
 		case 2:
 			_, err = io.ReadFull(r, rbuf[:2])
 			rlen = (uint(rbuf[0]) << 8) | uint(rbuf[1])
@@ -121,102 +130,76 @@ func (e *Event) ReadFrom(r io.Reader) (int64, error) {
 			_, err = io.ReadFull(r, rbuf[:4])
 			rlen = (uint(rbuf[0]) << 24) | (uint(rbuf[1]) << 16) | (uint(rbuf[2]) << 8) | uint(rbuf[3])
 		default:
-			return 0, fmt.Errorf("Wrong byte length in event decoding (got %d)", rbuf[1])
+			return nil, fmt.Errorf("Wrong byte length in event decoding (got %d)", rbuf[1])
 		}
 		if err != nil {
-			return 0, fmt.Errorf("Length read failed in event decoding, %s", err)
+			return nil, fmt.Errorf("Length read failed in event decoding, %s", err)
 		}
 	}
 
 	dbuf := make([]byte, rlen)
 	re, err := io.ReadFull(r, dbuf)
 	if err != nil {
-		return 0, fmt.Errorf("Expected %d bytes, but got %d bytes while decoding value for event %d (%s), %s", rlen, re, eventId, eventId, err)
+		return nil, fmt.Errorf("Expected %d bytes, but got %d bytes while decoding value for event %d (%s), %s", rlen, re, eventId, eventId, err)
 	}
-	e.MsgId = msgId
-	e.Id = eventId
 
-	var x Packer
-	switch e.Id {
-	case ClientHelloEvent:
-		x = new(ClientHello)
-		break
-	case ServerHelloEvent:
-		x = new(ServerHello)
-		break
-	case ChannelSubscribeEvent:
-		x = new(ChannelSubscriptionList)
-		break
-	case ServerAckEvent:
-		x = new(ServerAck)
-		break
-	case BusPowerStatusUpdateEvent:
-		x = new(device.PowerStatus)
-		break
-	case BusPowerEvent:
-		x = new(BusPower)
-		break
-	case ChannelUpdateRequestEvent:
-		x = new(ChannelUpdateRequest)
-		break
-	case ChannelUpdateEvent:
-		x = new(ChannelUpdate)
-		break
-	case ChannelListRequestEvent:
-		x = new(ChannelListRequest)
-		break
-	case ChannelListEvent:
-		x = new(ChannelList)
-		break
-	case NodeUpdateRequestEvent:
-		x = new(NodeUpdateRequest)
-		break
-	case NodeUpdateEvent:
-		x = new(NodeUpdate)
-		break
-	case NodeListRequestEvent:
-		x = new(NodeListRequest)
-		break
-	case NodeListEvent:
-		x = new(NodeList)
-		break
-	case NodeFirmwareUploadEvent:
-		x = new(NodeFirmware)
-		break
-	case NodeFirmwareDownloadRequestEvent:
-		x = new(NodeFirmwareDownloadRequest)
-		break
-	case NodeFirmwareDownloadEvent:
-		x = new(NodeFirmware)
-		break
-	case NodeFirmwareProgressEvent:
-		x = new(NodeFirmwareProgress)
-		break
-	case NodeRebootRequestEvent:
-		x = new(NodeRebootRequest)
-		break
-	case BusPowerStatusUpdateRequestEvent:
-		x = new(BusPowerStatusUpdateRequest)
-		break
-	case DeviceInformationRequestEvent:
-		x = new(DeviceInformationRequest)
-		break
-	case DeviceInformationEvent:
-		x = new(device.Information)
-		break
-	case SystemPropertiesRequestEvent:
-		x = new(SystemPropertiesRequest)
-		break
-	case SystemPropertiesEvent:
-		x = properties.New()
-		break
+	var x Eventer
+	switch eventId {
+	case ClientHelloEventId:
+		x = NewClientHelloEvent("", 0, 0)
+	case ServerHelloEventId:
+		x = NewServerHelloEvent("", 9, 0)
+	case ChannelFilterEventId:
+		x = NewChannelFilterEvent()
+	case ServerAckEventId:
+		x = NewServerAckEvent(0)
+	case BusPowerStatusUpdateEventId:
+		x = NewBusPowerStatusUpdateEvent(nil)
+	case BusPowerEventId:
+		x = NewBusPowerEvent(true)
+	case ChannelUpdateRequestEventId:
+		x = NewChannelUpdateRequestEvent("", 0)
+	case ChannelUpdateEventId:
+		x = NewChannelUpdateEvent("", 0, 0, nil)
+	case ChannelListRequestEventId:
+		x = NewChannelListRequestEvent()
+	case ChannelListEventId:
+		x = NewChannelListEvent()
+	case NodeUpdateRequestEventId:
+		x = NewNodeUpdateRequestEvent(0)
+	case NodeUpdateEventId:
+		x = new(NodeUpdateEvent)
+	case NodeListRequestEventId:
+		x = NewNodeListRequestEvent()
+	case NodeListEventId:
+		x = NewNodeListEvent()
+	case NodeFirmwareDownloadRequestEventId:
+		x = NewNodeFirmwareDownloadRequestEvent(0)
+	case NodeFirmwareEventId:
+		x = NewNodeFirmwareEvent(0)
+	case NodeFirmwareProgressEventId:
+		x = NewNodeFirmwareProgressEvent(0)
+	case NodeRebootRequestEventId:
+		x = NewNodeRebootRequestEvent(0, false)
+	case BusPowerStatusUpdateRequestEventId:
+		x = NewBusPowerStatusUpdateRequestEvent()
+	case DeviceInformationRequestEventId:
+		x = NewDeviceInformationRequestEvent()
+	case DeviceInformationEventId:
+		x = NewDeviceInformationEvent(nil)
+	case SystemPropertiesRequestEventId:
+		x = NewSystemPropertiesRequestEvent()
+	case SystemPropertiesEventId:
+		x = NewSystemPropertiesEvent(nil)
 	default:
-		return 0, fmt.Errorf("Unprocessable event %d with %d bytes of payload", e.Id, rlen)
+		return nil, fmt.Errorf("Unprocessable event %d with %d bytes of payload", eventId, rlen)
 	}
+
+	x.SetMsgId(msgId)
 
 	if err = x.Unpack(dbuf); err != nil {
-		return 0, err
+		return nil, err
 	}
-	e.Value = x
-	return int64(3 + len_of_len + rlen), nil
+
+	return x, nil
 }

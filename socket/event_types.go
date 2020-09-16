@@ -1,11 +1,15 @@
 package socket
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/omzlo/nocand/models"
+	"github.com/omzlo/nocand/models/device"
 	"github.com/omzlo/nocand/models/nocan"
+	"github.com/omzlo/nocand/models/properties"
 	"strconv"
 	"time"
 )
@@ -60,29 +64,32 @@ func DecodeUint64(src []byte) uint64 {
 /****************************************************************************/
 // EmptyRequest
 
-type EmptyRequest struct{}
+type EmptyEvent struct {
+	BaseEvent
+}
 
-func (x EmptyRequest) Pack() ([]byte, error) {
+func (x EmptyEvent) Pack() ([]byte, error) {
 	return make([]byte, 0), nil
 }
 
-func (c *EmptyRequest) Unpack(b []byte) error {
+func (c *EmptyEvent) Unpack(b []byte) error {
 	return nil
 }
 
 /****************************************************************************/
 
-type ClientHello struct {
+type ClientHelloEvent struct {
+	BaseEvent
 	Tool         string
 	VersionMajor byte
 	VersionMinor byte
 }
 
-func NewClientHello(tool string, major byte, minor byte) *ClientHello {
-	return &ClientHello{tool, major, minor}
+func NewClientHelloEvent(tool string, major byte, minor byte) *ClientHelloEvent {
+	return &ClientHelloEvent{BaseEvent: BaseEvent{ClientHelloEventId, 0}, Tool: tool, VersionMajor: major, VersionMinor: minor}
 }
 
-func (ch *ClientHello) Pack() ([]byte, error) {
+func (ch *ClientHelloEvent) Pack() ([]byte, error) {
 	b := make([]byte, len(ch.Tool)+3, 0)
 	b = append(b, byte(len(ch.Tool)))
 	b = append(b, []byte(ch.Tool)...)
@@ -91,7 +98,7 @@ func (ch *ClientHello) Pack() ([]byte, error) {
 	return b, nil
 }
 
-func (ch *ClientHello) Unpack(b []byte) error {
+func (ch *ClientHelloEvent) Unpack(b []byte) error {
 	if int(b[0]+2) > len(b) {
 		return ErrorMissingData
 	}
@@ -103,45 +110,47 @@ func (ch *ClientHello) Unpack(b []byte) error {
 
 /****************************************************************************/
 
-type ServerHello struct {
-	ClientHello
+type ServerHelloEvent struct {
+	ClientHelloEvent
 }
 
-func NewServerHello(tool string, major byte, minor byte) *ServerHello {
-	return &ServerHello{ClientHello{tool, major, minor}}
+func NewServerHelloEvent(tool string, major byte, minor byte) *ServerHelloEvent {
+	return &ServerHelloEvent{ClientHelloEvent{BaseEvent: BaseEvent{ServerHelloEventId, 0}, Tool: tool, VersionMajor: major, VersionMinor: minor}}
 }
 
 /****************************************************************************/
-// ChannelSubscriptionList represents the list of channels that a client will receive.
+// ChannelFilter restricts the channels that a client will receive.
+// By default, the client receives all channels. By adding a filter, this can be restricted.
 //
 
-type ChannelSubscriptionList struct {
+type ChannelFilterEvent struct {
+	BaseEvent
 	Channels map[nocan.ChannelId]bool
 }
 
-func NewChannelSubscriptionList(chans ...nocan.ChannelId) *ChannelSubscriptionList {
-	clist := &ChannelSubscriptionList{Channels: make(map[nocan.ChannelId]bool)}
+func NewChannelFilterEvent(chans ...nocan.ChannelId) *ChannelFilterEvent {
+	clist := &ChannelFilterEvent{BaseEvent: BaseEvent{ChannelFilterEventId, 0}, Channels: make(map[nocan.ChannelId]bool)}
 	clist.Add(chans...)
 	return clist
 }
 
-func (sl *ChannelSubscriptionList) Add(chans ...nocan.ChannelId) {
+func (sl *ChannelFilterEvent) Add(chans ...nocan.ChannelId) {
 	for _, e := range chans {
 		sl.Channels[e] = true
 	}
 }
 
-func (sl *ChannelSubscriptionList) Remove(chans ...nocan.ChannelId) {
+func (sl *ChannelFilterEvent) Remove(chans ...nocan.ChannelId) {
 	for _, e := range chans {
 		delete(sl.Channels, e)
 	}
 }
 
-func (sl *ChannelSubscriptionList) Includes(id nocan.ChannelId) bool {
+func (sl *ChannelFilterEvent) Includes(id nocan.ChannelId) bool {
 	return sl.Channels[id]
 }
 
-func (sl *ChannelSubscriptionList) Pack() ([]byte, error) {
+func (sl *ChannelFilterEvent) Pack() ([]byte, error) {
 	p := make([]byte, len(sl.Channels)*2)
 
 	i := 0
@@ -152,7 +161,7 @@ func (sl *ChannelSubscriptionList) Pack() ([]byte, error) {
 	return p, nil
 }
 
-func (sl *ChannelSubscriptionList) Unpack(b []byte) error {
+func (sl *ChannelFilterEvent) Unpack(b []byte) error {
 	for i := 0; i < len(b); i += 2 {
 		x := nocan.ChannelId(DecodeUint16(b[i:]))
 		sl.Add(x)
@@ -160,8 +169,8 @@ func (sl *ChannelSubscriptionList) Unpack(b []byte) error {
 	return nil
 }
 
-func (sl *ChannelSubscriptionList) String() string {
-	s := "["
+func (sl *ChannelFilterEvent) String() string {
+	s := sl.BaseEvent.String() + "["
 
 	var i int = 0
 	for k, _ := range sl.Channels {
@@ -183,25 +192,27 @@ func (sl *ChannelSubscriptionList) String() string {
 //
 //
 
-type ServerAck struct {
+type ServerAckEvent struct {
+	BaseEvent
 	Code byte
 }
 
-var (
-	ServerAckSuccess        = NewServerAck(0)
-	ServerAckBadRequest     = NewServerAck(1)
-	ServerAckUnauthorized   = NewServerAck(2)
-	ServerAckNotFound       = NewServerAck(3)
-	ServerAckGeneralFailure = NewServerAck(4)
-	ServerAckUnknown        = NewServerAck(5)
+const (
+	ServerAckSuccess        = 0
+	ServerAckBadRequest     = 1
+	ServerAckUnauthorized   = 2
+	ServerAckNotFound       = 3
+	ServerAckGeneralFailure = 4
+	ServerAckTimeout        = 5
 )
 
-var serverAckStrings = [5]string{
+var serverAckStrings = [6]string{
 	"Success",
 	"Bad request",
 	"Unauthorized",
 	"Not found",
 	"General failure",
+	"Timeout",
 }
 
 var (
@@ -209,20 +220,21 @@ var (
 	ErrorServerAckUnauthorized   = errors.New("Unauthorized")
 	ErrorServerAckNotFound       = errors.New("Not found")
 	ErrorServerAckGeneralFailure = errors.New("General failure")
-	ErrorServerAckUnknown        = errors.New("Unknown error")
+	ErrorServerAckTimeout        = errors.New("Timeout")
+	ErrorServerAckUndefined      = errors.New("Undefined")
 )
 
-func NewServerAck(val byte) *ServerAck {
-	return &ServerAck{val}
+func NewServerAckEvent(val byte) *ServerAckEvent {
+	return &ServerAckEvent{BaseEvent: BaseEvent{ServerAckEventId, 0}, Code: val}
 }
 
-func (sa *ServerAck) Pack() ([]byte, error) {
+func (sa *ServerAckEvent) Pack() ([]byte, error) {
 	p := make([]byte, 1)
 	p[0] = sa.Code
 	return p, nil
 }
 
-func (sa *ServerAck) Unpack(value []byte) error {
+func (sa *ServerAckEvent) Unpack(value []byte) error {
 	if len(value) < 1 {
 		return ErrorMissingData
 	}
@@ -230,14 +242,14 @@ func (sa *ServerAck) Unpack(value []byte) error {
 	return nil
 }
 
-func (sa ServerAck) String() string {
-	if sa.Code < 5 {
+func (sa ServerAckEvent) String() string {
+	if sa.Code < 6 {
 		return serverAckStrings[sa.Code]
 	}
-	return "Unknown error"
+	return sa.BaseEvent.String() + "Unknown error"
 }
 
-func (sa ServerAck) ToError() error {
+func (sa ServerAckEvent) ToError() error {
 	switch sa.Code {
 	case 0:
 		return nil
@@ -249,8 +261,10 @@ func (sa ServerAck) ToError() error {
 		return ErrorServerAckNotFound
 	case 4:
 		return ErrorServerAckGeneralFailure
+	case 5:
+		return ErrorServerAckTimeout
 	}
-	return ErrorServerAckUnknown
+	return ErrorServerAckUndefined
 }
 
 /****************************************************************************/
@@ -259,32 +273,33 @@ func (sa ServerAck) ToError() error {
 //
 //
 
-type ChannelUpdateRequest struct {
-	Id   nocan.ChannelId
-	Name string
+type ChannelUpdateRequestEvent struct {
+	BaseEvent
+	ChannelId   nocan.ChannelId
+	ChannelName string
 }
 
-func NewChannelUpdateRequest(chan_name string, chan_id nocan.ChannelId) *ChannelUpdateRequest {
-	return &ChannelUpdateRequest{chan_id, chan_name}
+func NewChannelUpdateRequestEvent(chan_name string, chan_id nocan.ChannelId) *ChannelUpdateRequestEvent {
+	return &ChannelUpdateRequestEvent{BaseEvent: BaseEvent{ChannelUpdateRequestEventId, 0}, ChannelId: chan_id, ChannelName: chan_name}
 }
 
-func (cu *ChannelUpdateRequest) PackedLength() int {
-	return len(cu.Name) + 3
+func (cu *ChannelUpdateRequestEvent) PackedLength() int {
+	return len(cu.ChannelName) + 3
 }
 
-func (cu *ChannelUpdateRequest) Pack() ([]byte, error) {
+func (cu *ChannelUpdateRequestEvent) Pack() ([]byte, error) {
 	buf := make([]byte, 0, cu.PackedLength())
-	buf = append(buf, byte(cu.Id>>8), byte(cu.Id&0xFF))
-	buf = append(buf, byte(len(cu.Name)))
-	buf = append(buf, []byte(cu.Name)...)
+	buf = append(buf, byte(cu.ChannelId>>8), byte(cu.ChannelId&0xFF))
+	buf = append(buf, byte(len(cu.ChannelName)))
+	buf = append(buf, []byte(cu.ChannelName)...)
 	return buf, nil
 }
 
-func (cu *ChannelUpdateRequest) Unpack(value []byte) error {
+func (cu *ChannelUpdateRequestEvent) Unpack(value []byte) error {
 	if len(value) < 3 {
 		return ErrorMissingData
 	}
-	cu.Id = (nocan.ChannelId(value[0]) << 8) | nocan.ChannelId(value[1])
+	cu.ChannelId = (nocan.ChannelId(value[0]) << 8) | nocan.ChannelId(value[1])
 
 	lName := int(value[2])
 	if lName > 64 {
@@ -294,15 +309,15 @@ func (cu *ChannelUpdateRequest) Unpack(value []byte) error {
 	if lName > len(value) {
 		return ErrorMissingData
 	}
-	cu.Name = string(value[:lName])
+	cu.ChannelName = string(value[:lName])
 	return nil
 }
 
-func (cu ChannelUpdateRequest) String() string {
-	if cu.Name == "" {
-		return fmt.Sprintf("#%d", cu.Id)
+func (cu ChannelUpdateRequestEvent) String() string {
+	if cu.ChannelName == "" {
+		return fmt.Sprintf("%s#%d", cu.BaseEvent.String(), cu.ChannelId)
 	}
-	return fmt.Sprintf("%s", cu.Name)
+	return cu.BaseEvent.String() + cu.ChannelName
 }
 
 /****************************************************************************/
@@ -334,28 +349,29 @@ func (cs ChannelStatus) String() string {
 	}
 }
 
-type ChannelUpdate struct {
-	Id     nocan.ChannelId
-	Name   string
-	Status ChannelStatus
-	Value  []byte
+type ChannelUpdateEvent struct {
+	BaseEvent
+	ChannelId   nocan.ChannelId
+	ChannelName string
+	Status      ChannelStatus
+	Value       []byte
 }
 
-func (cu *ChannelUpdate) MarshalJSON() ([]byte, error) {
+func (cu *ChannelUpdateEvent) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
 		Id     nocan.ChannelId `json:"id"`
 		Name   string          `json:"name"`
 		Status string          `json:"status"`
 		Value  string          `json:"value"`
 	}{
-		Id:     cu.Id,
-		Name:   cu.Name,
+		Id:     cu.ChannelId,
+		Name:   cu.ChannelName,
 		Status: cu.Status.String(),
 		Value:  string(cu.Value),
 	})
 }
 
-func NewChannelUpdate(chan_name string, chan_id nocan.ChannelId, status ChannelStatus, value []byte) *ChannelUpdate {
+func NewChannelUpdateEvent(chan_name string, chan_id nocan.ChannelId, status ChannelStatus, value []byte) *ChannelUpdateEvent {
 	var v []byte
 
 	if value != nil {
@@ -364,19 +380,19 @@ func NewChannelUpdate(chan_name string, chan_id nocan.ChannelId, status ChannelS
 	} else {
 		v = nil
 	}
-	return &ChannelUpdate{chan_id, chan_name, status, v}
+	return &ChannelUpdateEvent{BaseEvent: BaseEvent{ChannelUpdateEventId, 0}, ChannelId: chan_id, ChannelName: chan_name, Status: status, Value: v}
 }
 
-func (cu *ChannelUpdate) PackedLength() int {
-	return len(cu.Name) + len(cu.Value) + 5
+func (cu *ChannelUpdateEvent) PackedLength() int {
+	return len(cu.ChannelName) + len(cu.Value) + 5
 }
 
-func (cu *ChannelUpdate) Pack() ([]byte, error) {
+func (cu *ChannelUpdateEvent) Pack() ([]byte, error) {
 	buf := make([]byte, 0, cu.PackedLength())
 	buf = append(buf, byte(cu.Status))
-	buf = append(buf, byte(cu.Id>>8), byte(cu.Id&0xFF))
-	buf = append(buf, byte(len(cu.Name)))
-	buf = append(buf, []byte(cu.Name)...)
+	buf = append(buf, byte(cu.ChannelId>>8), byte(cu.ChannelId&0xFF))
+	buf = append(buf, byte(len(cu.ChannelName)))
+	buf = append(buf, []byte(cu.ChannelName)...)
 	buf = append(buf, byte(len(cu.Value)))
 	if cu.Value != nil {
 		buf = append(buf, cu.Value...)
@@ -384,13 +400,13 @@ func (cu *ChannelUpdate) Pack() ([]byte, error) {
 	return buf, nil
 }
 
-func (cu *ChannelUpdate) Unpack(value []byte) error {
+func (cu *ChannelUpdateEvent) Unpack(value []byte) error {
 	if len(value) < 3 {
 		return ErrorMissingData
 	}
 	cu.Status = ChannelStatus(value[0])
 
-	cu.Id = (nocan.ChannelId(value[1]) << 8) | nocan.ChannelId(value[2])
+	cu.ChannelId = (nocan.ChannelId(value[1]) << 8) | nocan.ChannelId(value[2])
 
 	lName := int(value[3])
 	/*
@@ -406,7 +422,7 @@ func (cu *ChannelUpdate) Unpack(value []byte) error {
 	if lName > len(value) {
 		return ErrorMissingData
 	}
-	cu.Name = string(value[:lName])
+	cu.ChannelName = string(value[:lName])
 	value = value[lName:]
 
 	lValue := int(value[0])
@@ -419,44 +435,57 @@ func (cu *ChannelUpdate) Unpack(value []byte) error {
 	return nil
 }
 
-func (cu ChannelUpdate) String() string {
+func (cu ChannelUpdateEvent) String() string {
+	s := cu.BaseEvent.String()
 	switch cu.Status {
 	case CHANNEL_CREATED:
-		return fmt.Sprintf("CREATED\t#%d\t%s", cu.Id, cu.Name)
+		s += fmt.Sprintf("CREATED\t#%d\t%s", cu.ChannelId, cu.ChannelName)
+		break
 	case CHANNEL_DESTROYED:
-		return fmt.Sprintf("DESTROYED\t#%d\t%s", cu.Id, cu.Name)
+		s += fmt.Sprintf("DESTROYED\t#%d\t%s", cu.ChannelId, cu.ChannelName)
+		break
 	case CHANNEL_UPDATED:
-		return fmt.Sprintf("UPDATED\t#%d\t%s\t%q", cu.Id, cu.Name, cu.Value)
+		s += fmt.Sprintf("UPDATED\t#%d\t%s\t%q", cu.ChannelId, cu.ChannelName, cu.Value)
+		break
 	case CHANNEL_NOT_FOUND:
-		return fmt.Sprintf("NOT_FOUND\t#%d\t%s", cu.Id, cu.Name)
+		s += fmt.Sprintf("NOT_FOUND\t#%d\t%s", cu.ChannelId, cu.ChannelName)
+		break
+	default:
+		s += "ERROR"
+		break
 	}
-	return "ERROR"
+	return s
 }
 
-// ChannelListRequest
+// ChannelListRequestEvent
 //
 //
 
-type ChannelListRequest struct {
-	EmptyRequest
+type ChannelListRequestEvent struct {
+	EmptyEvent
 }
 
-// ChannelList
+func NewChannelListRequestEvent() *ChannelListRequestEvent {
+	return &ChannelListRequestEvent{EmptyEvent{BaseEvent{ChannelListRequestEventId, 0}}}
+}
+
+// ChannelListEvent
 //
 //
-type ChannelList struct {
-	Channels []*ChannelUpdate `json:"channels"`
+type ChannelListEvent struct {
+	BaseEvent `json:"-"`
+	Channels  []*ChannelUpdateEvent `json:"channels"`
 }
 
-func NewChannelList() *ChannelList {
-	return &ChannelList{make([]*ChannelUpdate, 0, 8)}
+func NewChannelListEvent() *ChannelListEvent {
+	return &ChannelListEvent{BaseEvent: BaseEvent{ChannelListEventId, 0}, Channels: make([]*ChannelUpdateEvent, 0, 8)}
 }
 
-func (cl *ChannelList) Append(cu *ChannelUpdate) {
+func (cl *ChannelListEvent) Append(cu *ChannelUpdateEvent) {
 	cl.Channels = append(cl.Channels, cu)
 }
 
-func (cl *ChannelList) Pack() ([]byte, error) {
+func (cl *ChannelListEvent) Pack() ([]byte, error) {
 	alloc := 0
 	for _, cu := range cl.Channels {
 		alloc += cu.PackedLength()
@@ -473,14 +502,14 @@ func (cl *ChannelList) Pack() ([]byte, error) {
 	return b, nil
 }
 
-func (cl *ChannelList) Unpack(b []byte) error {
-	cl.Channels = make([]*ChannelUpdate, 0, 8)
+func (cl *ChannelListEvent) Unpack(b []byte) error {
+	cl.Channels = make([]*ChannelUpdateEvent, 0, 8)
 
 	for {
 		if len(b) == 0 {
 			break
 		}
-		cu := new(ChannelUpdate)
+		cu := new(ChannelUpdateEvent)
 		err := cu.Unpack(b)
 		if err != nil {
 			return err
@@ -491,7 +520,7 @@ func (cl *ChannelList) Unpack(b []byte) error {
 	return nil
 }
 
-func (cl ChannelList) String() string {
+func (cl ChannelListEvent) String() string {
 	var resp string
 	for _, cu := range cl.Channels {
 		resp += cu.String() + "\n"
@@ -499,25 +528,26 @@ func (cl ChannelList) String() string {
 	return resp
 }
 
-// NodeUpdateRequest
+// NodeUpdateRequestEvent
 //
 //
 
-type NodeUpdateRequest struct {
+type NodeUpdateRequestEvent struct {
+	BaseEvent
 	NodeId nocan.NodeId
 }
 
-func NewNodeUpdateRequest(node_id nocan.NodeId) *NodeUpdateRequest {
-	return &NodeUpdateRequest{node_id}
+func NewNodeUpdateRequestEvent(node_id nocan.NodeId) *NodeUpdateRequestEvent {
+	return &NodeUpdateRequestEvent{BaseEvent: BaseEvent{NodeUpdateRequestEventId, 0}, NodeId: node_id}
 }
 
-func (nu NodeUpdateRequest) Pack() ([]byte, error) {
+func (nu NodeUpdateRequestEvent) Pack() ([]byte, error) {
 	b := make([]byte, 1)
 	b[0] = byte(nu.NodeId)
 	return b, nil
 }
 
-func (nu *NodeUpdateRequest) Unpack(b []byte) error {
+func (nu *NodeUpdateRequestEvent) Unpack(b []byte) error {
 	if len(b) < 1 {
 		return ErrorMissingData
 	}
@@ -525,41 +555,42 @@ func (nu *NodeUpdateRequest) Unpack(b []byte) error {
 	return nil
 }
 
-func (nu NodeUpdateRequest) String() string {
+func (nu NodeUpdateRequestEvent) String() string {
 	return fmt.Sprintf("#%d", nu.NodeId)
 }
 
-// NodeUpdate
+// NodeUpdateEvent
 //
 //
 
-type NodeUpdate struct {
-	Id       nocan.NodeId     `json:"id"`
-	State    models.NodeState `json:"state"`
-	Udid     models.Udid8     `json:"udid"`
-	LastSeen time.Time        `json:"last_seen"`
+type NodeUpdateEvent struct {
+	BaseEvent `json:-"`
+	NodeId    nocan.NodeId     `json:"id"`
+	State     models.NodeState `json:"state"`
+	Udid      models.Udid8     `json:"udid"`
+	LastSeen  time.Time        `json:"last_seen"`
 }
 
-func NewNodeUpdate(id nocan.NodeId, state models.NodeState, udid models.Udid8, last_seen time.Time) *NodeUpdate {
-	nu := &NodeUpdate{Id: id, State: state, LastSeen: last_seen.UTC()}
+func NewNodeUpdateEvent(id nocan.NodeId, state models.NodeState, udid models.Udid8, last_seen time.Time) *NodeUpdateEvent {
+	nu := &NodeUpdateEvent{BaseEvent: BaseEvent{NodeUpdateEventId, 0}, NodeId: id, State: state, LastSeen: last_seen.UTC()}
 	copy(nu.Udid[:], udid[:])
 	return nu
 }
 
-func (nu *NodeUpdate) Pack() ([]byte, error) {
+func (nu *NodeUpdateEvent) Pack() ([]byte, error) {
 	b := make([]byte, 18)
-	b[0] = byte(nu.Id)
+	b[0] = byte(nu.NodeId)
 	b[1] = byte(nu.State)
 	copy(b[2:10], nu.Udid[:])
 	EncodeUint64(b[10:18], uint64(nu.LastSeen.UnixNano()))
 	return b, nil
 }
 
-func (nu *NodeUpdate) Unpack(b []byte) error {
+func (nu *NodeUpdateEvent) Unpack(b []byte) error {
 	if len(b) < 18 {
 		return ErrorMissingData
 	}
-	nu.Id = nocan.NodeId(b[0])
+	nu.NodeId = nocan.NodeId(b[0])
 	nu.State = models.NodeState(b[1])
 	copy(nu.Udid[:], b[2:10])
 	tm := DecodeUint64(b[10:18])
@@ -567,27 +598,28 @@ func (nu *NodeUpdate) Unpack(b []byte) error {
 	return nil
 }
 
-func (nu NodeUpdate) String() string {
+func (nu NodeUpdateEvent) String() string {
 	return fmt.Sprintf("#%d\t%s\t%s\t%s", nu.Id, nu.Udid, nu.State, nu.LastSeen.Format(time.RFC3339Nano))
 }
 
-// NodeList
+// NodeListEvent
 //
 //
 
-type NodeList struct {
-	Nodes []*NodeUpdate `json:"nodes"`
+type NodeListEvent struct {
+	BaseEvent
+	Nodes []*NodeUpdateEvent `json:"nodes"`
 }
 
-func NewNodeList() *NodeList {
-	return &NodeList{Nodes: make([]*NodeUpdate, 0, 8)}
+func NewNodeListEvent() *NodeListEvent {
+	return &NodeListEvent{BaseEvent: BaseEvent{NodeListEventId, 0}, Nodes: make([]*NodeUpdateEvent, 0, 8)}
 }
 
-func (nl *NodeList) Append(nu *NodeUpdate) {
+func (nl *NodeListEvent) Append(nu *NodeUpdateEvent) {
 	nl.Nodes = append(nl.Nodes, nu)
 }
 
-func (nl *NodeList) Pack() ([]byte, error) {
+func (nl *NodeListEvent) Pack() ([]byte, error) {
 	b := make([]byte, 0, len(nl.Nodes)*18)
 	for _, nu := range nl.Nodes {
 		sb, _ := nu.Pack()
@@ -596,13 +628,13 @@ func (nl *NodeList) Pack() ([]byte, error) {
 	return b, nil
 }
 
-func (nl *NodeList) Unpack(b []byte) error {
-	nl.Nodes = make([]*NodeUpdate, 0, 8)
+func (nl *NodeListEvent) Unpack(b []byte) error {
+	nl.Nodes = make([]*NodeUpdateEvent, 0, 8)
 	for {
 		if len(b) == 0 {
 			break
 		}
-		nu := &NodeUpdate{}
+		nu := new(NodeUpdateEvent)
 		if err := nu.Unpack(b); err != nil {
 			return err
 		}
@@ -612,7 +644,7 @@ func (nl *NodeList) Unpack(b []byte) error {
 	return nil
 }
 
-func (nl NodeList) String() string {
+func (nl NodeListEvent) String() string {
 	var resp string
 	for _, nu := range nl.Nodes {
 		resp += nu.String() + "\n"
@@ -620,20 +652,43 @@ func (nl NodeList) String() string {
 	return resp
 }
 
-// NodeListRequest
+// NodeListRequestEvent
 //
 //
 
-type NodeListRequest struct {
-	EmptyRequest
+type NodeListRequestEvent struct {
+	EmptyEvent
 }
 
-// NodeFirmwareDownloadRequest
+func NewNodeListRequestEvent() *NodeListRequestEvent {
+	return &NodeListRequestEvent{EmptyEvent{BaseEvent{NodeListRequestEventId, 0}}}
+}
+
+// NodeFirmwareDownloadRequestEvent
 //
 //
 
-type NodeFirmwareDownloadRequest struct {
-	EmptyRequest
+type NodeFirmwareDownloadRequestEvent struct {
+	BaseEvent
+	NodeId nocan.NodeId
+}
+
+func NewNodeFirmwareDownloadRequestEvent(nid nocan.NodeId) *NodeFirmwareDownloadRequestEvent {
+	return &NodeFirmwareDownloadRequestEvent{BaseEvent: BaseEvent{NodeFirmwareDownloadRequestEventId, 0}, NodeId: nid}
+}
+
+func (ndr NodeFirmwareDownloadRequestEvent) Pack() ([]byte, error) {
+	b := make([]byte, 1)
+	b[0] = byte(ndr.NodeId)
+	return b, nil
+}
+
+func (ndr *NodeFirmwareDownloadRequestEvent) Unpack(b []byte) error {
+	if len(b) == 0 {
+		return ErrorMissingData
+	}
+	ndr.NodeId = nocan.NodeId(b[0])
+	return nil
 }
 
 // FirmwareBlock
@@ -645,32 +700,41 @@ type FirmwareBlock struct {
 	Data   []byte
 }
 
-type NodeFirmware struct {
-	Id       nocan.NodeId
+type NodeFirmwareEvent struct {
+	BaseEvent
+	NodeId   nocan.NodeId
 	Download bool
 	Limit    uint32
 	Code     []FirmwareBlock
 }
 
-//const MAX_UINT32 = (1 << 32) - 1
-
-func NewNodeFirmware(id nocan.NodeId, isDownload bool) *NodeFirmware {
-	return &NodeFirmware{Id: id, Download: isDownload, Limit: 0, Code: make([]FirmwareBlock, 0, 8)}
+func NewNodeFirmwareEvent(id nocan.NodeId) *NodeFirmwareEvent {
+	return &NodeFirmwareEvent{BaseEvent: BaseEvent{NodeFirmwareEventId, 0}, NodeId: id, Limit: 0, Code: make([]FirmwareBlock, 0, 8)}
 }
 
-func (nf *NodeFirmware) AppendBlock(offset uint32, data []byte) {
+func (nf *NodeFirmwareEvent) ConfigureAsDownload() *NodeFirmwareEvent {
+	nf.Download = true
+	return nf
+}
+
+func (nf *NodeFirmwareEvent) ConfigureAsUpload() *NodeFirmwareEvent {
+	nf.Download = false
+	return nf
+}
+
+func (nf *NodeFirmwareEvent) AppendBlock(offset uint32, data []byte) {
 	fb := FirmwareBlock{Offset: offset, Data: make([]byte, len(data))}
 	copy(fb.Data, data)
 	nf.Code = append(nf.Code, fb)
 }
 
-func (nf *NodeFirmware) Pack() ([]byte, error) {
+func (nf *NodeFirmwareEvent) Pack() ([]byte, error) {
 	tlen := 6
 	for _, block := range nf.Code {
 		tlen += 8 + len(block.Data)
 	}
 	b := make([]byte, tlen)
-	b[0] = byte(nf.Id)
+	b[0] = byte(nf.NodeId)
 	if nf.Download {
 		b[1] = 1
 	} else {
@@ -689,11 +753,11 @@ func (nf *NodeFirmware) Pack() ([]byte, error) {
 	return b, nil
 }
 
-func (nf *NodeFirmware) Unpack(b []byte) error {
+func (nf *NodeFirmwareEvent) Unpack(b []byte) error {
 	if len(b) < 2 {
 		return ErrorMissingData
 	}
-	nf.Id = nocan.NodeId(b[0])
+	nf.NodeId = nocan.NodeId(b[0])
 	if b[1] == 0 {
 		nf.Download = false
 	} else {
@@ -746,59 +810,65 @@ func (pr ProgressReport) String() string {
 	return "!unknown!"
 }
 
-type NodeFirmwareProgress struct {
-	Id               nocan.NodeId
+type NodeFirmwareProgressEvent struct {
+	BaseEvent
+	NodeId           nocan.NodeId
 	Progress         ProgressReport
 	BytesTransferred uint32
 }
 
-func NewFirmwareProgress(id nocan.NodeId) *NodeFirmwareProgress {
-	return &NodeFirmwareProgress{Id: id, Progress: 0, BytesTransferred: 0}
+func NewNodeFirmwareProgressEvent(id nocan.NodeId) *NodeFirmwareProgressEvent {
+	return &NodeFirmwareProgressEvent{BaseEvent: BaseEvent{NodeFirmwareProgressEventId, 0}, NodeId: id, Progress: 0, BytesTransferred: 0}
 }
 
-func (nfp *NodeFirmwareProgress) Update(progress ProgressReport, transferred uint32) *NodeFirmwareProgress {
-	return &NodeFirmwareProgress{Id: nfp.Id, Progress: progress, BytesTransferred: transferred}
+func (nfp *NodeFirmwareProgressEvent) Update(progress ProgressReport, transferred uint32) *NodeFirmwareProgressEvent {
+	return &NodeFirmwareProgressEvent{BaseEvent: BaseEvent{NodeFirmwareProgressEventId, 0}, NodeId: nfp.NodeId, Progress: progress, BytesTransferred: transferred}
 }
 
-func (nfp *NodeFirmwareProgress) MarkAsFailed() *NodeFirmwareProgress {
+func (nfp *NodeFirmwareProgressEvent) MarkAsFailed() *NodeFirmwareProgressEvent {
 	return nfp.Update(ProgressFailed, 0)
 }
 
-func (nfp *NodeFirmwareProgress) MarkAsSuccess() *NodeFirmwareProgress {
+func (nfp *NodeFirmwareProgressEvent) MarkAsSuccess() *NodeFirmwareProgressEvent {
 	return nfp.Update(ProgressSuccess, 0)
 }
 
-func (nfp *NodeFirmwareProgress) Pack() ([]byte, error) {
+func (nfp *NodeFirmwareProgressEvent) Pack() ([]byte, error) {
 	b := make([]byte, 6)
-	b[0] = byte(nfp.Id)
+	b[0] = byte(nfp.NodeId)
 	b[1] = byte(nfp.Progress)
 	EncodeUint32(b[2:], nfp.BytesTransferred)
 	return b, nil
 }
 
-func (nfp *NodeFirmwareProgress) Unpack(b []byte) error {
+func (nfp *NodeFirmwareProgressEvent) Unpack(b []byte) error {
 	if len(b) < 6 {
 		return ErrorMissingData
 	}
-	nfp.Id = nocan.NodeId(b[0])
+	nfp.NodeId = nocan.NodeId(b[0])
 	nfp.Progress = ProgressReport(b[1])
 	nfp.BytesTransferred = DecodeUint32(b[2:])
 	return nil
 }
 
-// BusPower
+func (nfp NodeFirmwareProgressEvent) String() string {
+	return nfp.BaseEvent.String() + nfp.Progress.String()
+}
+
+// BusPowerEvent
 //
 //
 
-type BusPower struct {
+type BusPowerEvent struct {
+	BaseEvent
 	PowerOn bool
 }
 
-func NewBusPower(power_on bool) *BusPower {
-	return &BusPower{power_on}
+func NewBusPowerEvent(power_on bool) *BusPowerEvent {
+	return &BusPowerEvent{BaseEvent: BaseEvent{BusPowerEventId, 0}, PowerOn: power_on}
 }
 
-func (bp BusPower) Pack() ([]byte, error) {
+func (bp BusPowerEvent) Pack() ([]byte, error) {
 	b := make([]byte, 1)
 	if bp.PowerOn {
 		b[0] = 1
@@ -808,7 +878,7 @@ func (bp BusPower) Pack() ([]byte, error) {
 	return b, nil
 }
 
-func (bp *BusPower) Unpack(b []byte) error {
+func (bp *BusPowerEvent) Unpack(b []byte) error {
 	if len(b) != 1 {
 		return ErrorMissingData
 	}
@@ -820,86 +890,297 @@ func (bp *BusPower) Unpack(b []byte) error {
 //
 //
 
-type BusPowerStatusUpdateRequest struct {
-	EmptyRequest
+type BusPowerStatusUpdateRequestEvent struct {
+	EmptyEvent
 }
 
-type DeviceInformationRequest struct {
-	EmptyRequest
-}
-
-type SystemPropertiesRequest struct {
-	EmptyRequest
+func NewBusPowerStatusUpdateRequestEvent() *BusPowerStatusUpdateRequestEvent {
+	return &BusPowerStatusUpdateRequestEvent{EmptyEvent{BaseEvent{BusPowerStatusUpdateRequestEventId, 0}}}
 }
 
 //
 //
 //
 
-type NodeRebootRequest byte
+type DeviceInformationRequestEvent struct {
+	EmptyEvent
+}
 
-func CreateNodeRebootRequest(nid nocan.NodeId, force bool) NodeRebootRequest {
+func NewDeviceInformationRequestEvent() *DeviceInformationRequestEvent {
+	return &DeviceInformationRequestEvent{EmptyEvent{BaseEvent{DeviceInformationRequestEventId, 0}}}
+}
+
+//
+//
+//
+
+type SystemPropertiesRequestEvent struct {
+	EmptyEvent
+}
+
+func NewSystemPropertiesRequestEvent() *SystemPropertiesRequestEvent {
+	return &SystemPropertiesRequestEvent{EmptyEvent{BaseEvent{SystemPropertiesRequestEventId, 0}}}
+}
+
+//
+//
+//
+
+type NodeRebootRequestEvent struct {
+	BaseEvent
+	RebootId byte
+}
+
+func NewNodeRebootRequestEvent(nid nocan.NodeId, force bool) *NodeRebootRequestEvent {
+	rid := byte(nid)
 	if force {
-		return NodeRebootRequest(nid) | 128
+		rid |= 128
 	}
-	return NodeRebootRequest(nid)
+	return &NodeRebootRequestEvent{BaseEvent: BaseEvent{NodeRebootRequestEventId, 0}, RebootId: rid}
 }
 
-func (nr NodeRebootRequest) NodeId() nocan.NodeId {
-	return nocan.NodeId(nr & 0x7F)
+func (nr NodeRebootRequestEvent) NodeId() nocan.NodeId {
+	return nocan.NodeId(nr.RebootId & 0x7F)
 }
 
-func (nr NodeRebootRequest) Force() bool {
-	return (nr & 128) != 0
+func (nr *NodeRebootRequestEvent) Forced() bool {
+	return (nr.RebootId & 128) != 0
 }
 
-func (nr NodeRebootRequest) Pack() ([]byte, error) {
+func (nr NodeRebootRequestEvent) Pack() ([]byte, error) {
 	b := make([]byte, 1)
-	b[0] = byte(nr)
+	b[0] = nr.RebootId
 	return b, nil
 }
 
-func (nr *NodeRebootRequest) Unpack(b []byte) error {
+func (nr *NodeRebootRequestEvent) Unpack(b []byte) error {
 	if len(b) != 1 {
 		return ErrorMissingData
 	}
-	*nr = NodeRebootRequest(b[0])
+	nr.RebootId = b[0]
 	return nil
+}
+
+func (nr NodeRebootRequestEvent) String() string {
+	return nr.BaseEvent.String() + fmt.Sprintf("%d %t", nr.NodeId(), nr.Forced)
+}
+
+//
+//
+//
+
+type DeviceInformationEvent struct {
+	BaseEvent
+	Information *device.Information
+}
+
+func NewDeviceInformationEvent(di *device.Information) *DeviceInformationEvent {
+	return &DeviceInformationEvent{BaseEvent: BaseEvent{DeviceInformationEventId, 0}, Information: di}
+}
+
+func (ie DeviceInformationEvent) Pack() ([]byte, error) {
+	buf := make([]byte, 0, 26)
+	buf = append(buf, ie.Information.Type[:]...)
+	buf = append(buf, ie.Information.Signature[:]...)
+	buf = append(buf, ie.Information.VersionMajor)
+	buf = append(buf, ie.Information.VersionMinor)
+	buf = append(buf, ie.Information.ChipId[:]...)
+	return buf, nil
+}
+
+func (ie *DeviceInformationEvent) Unpack(b []byte) error {
+	if len(b) < 26 {
+		fmt.Errorf("Device info must be at least 18 bytes long, found %d", len(b))
+	}
+	di := new(device.Information)
+	copy(di.Type[:], b[0:8])
+	copy(di.Signature[:], b[8:12])
+	di.VersionMajor = b[12]
+	di.VersionMinor = b[13]
+	copy(di.ChipId[:], b[14:26])
+	ie.Information = di
+	return nil
+}
+
+func (ie DeviceInformationEvent) String() string {
+	return ie.BaseEvent.String() + ie.Information.String()
+}
+
+//
+//
+//
+
+type SystemPropertiesEvent struct {
+	BaseEvent
+	Properties *properties.Properties
+}
+
+func NewSystemPropertiesEvent(props *properties.Properties) *SystemPropertiesEvent {
+	return &SystemPropertiesEvent{BaseEvent: BaseEvent{SystemPropertiesEventId, 0}, Properties: props}
+}
+
+func (sp SystemPropertiesEvent) Pack() ([]byte, error) {
+	buf := new(bytes.Buffer)
+
+	for key, prop := range sp.Properties.Map {
+		buf.WriteByte(byte(len(key)))
+		buf.WriteString(key)
+
+		buf.WriteByte(prop.Type)
+		switch prop.Type {
+		case properties.PROP_TYPE_NULL:
+			// do nothing
+		case properties.PROP_TYPE_INT32:
+			binary.Write(buf, binary.BigEndian, prop.Value.(int32))
+		case properties.PROP_TYPE_UINT32:
+			binary.Write(buf, binary.BigEndian, prop.Value.(uint32))
+		case properties.PROP_TYPE_FLOAT32:
+			binary.Write(buf, binary.BigEndian, prop.Value.(uint32))
+		case properties.PROP_TYPE_BOOL:
+			binary.Write(buf, binary.BigEndian, prop.Value.(bool))
+		case properties.PROP_TYPE_STRING:
+			s := prop.Value.(string)
+			buf.WriteByte(byte(len(s)))
+			buf.WriteString(s)
+		default:
+			return nil, fmt.Errorf("Unexpected type %d while packing Property", prop.Type)
+		}
+	}
+	return buf.Bytes(), nil
+}
+
+func (sp *SystemPropertiesEvent) Unpack(b []byte) error {
+	var len byte
+	var ptype byte
+	var err error
+
+	sp.Properties.Clear()
+
+	buf := bytes.NewReader(b)
+
+	for buf.Len() > 0 {
+		if len, err = buf.ReadByte(); err != nil {
+			return err
+		}
+		key := make([]byte, len)
+		if _, err := buf.Read(key); err != nil {
+			return err
+		}
+		if ptype, err = buf.ReadByte(); err != nil {
+			return err
+		}
+		switch ptype {
+		case properties.PROP_TYPE_INT32:
+			var i int32
+			binary.Read(buf, binary.BigEndian, &i)
+			sp.Properties.AddInt32(string(key), i)
+		case properties.PROP_TYPE_UINT32:
+			var u uint32
+			binary.Read(buf, binary.BigEndian, &u)
+			sp.Properties.AddUint32(string(key), u)
+		case properties.PROP_TYPE_FLOAT32:
+			var f float32
+			binary.Read(buf, binary.BigEndian, &f)
+			sp.Properties.AddFloat32(string(key), f)
+		case properties.PROP_TYPE_BOOL:
+			var b bool
+			binary.Read(buf, binary.BigEndian, &b)
+			sp.Properties.AddBool(string(key), b)
+		case properties.PROP_TYPE_STRING:
+			var slen byte
+			if len, err = buf.ReadByte(); err != nil {
+				return err
+			}
+			sval := make([]byte, slen)
+			if _, err := buf.Read(sval); err != nil {
+				return err
+			}
+			sp.Properties.AddString(string(key), string(sval))
+		default:
+			return fmt.Errorf("Unexpected type %d unpacking Property", ptype)
+		}
+	}
+	return nil
+}
+
+func (sp SystemPropertiesEvent) String() string {
+	return sp.BaseEvent.String() + fmt.Sprintf("[%d properties]", len(sp.Properties.Map))
+}
+
+//
+//
+//
+
+type BusPowerStatusUpdateEvent struct {
+	BaseEvent
+	Status *device.PowerStatus
+}
+
+func NewBusPowerStatusUpdateEvent(status *device.PowerStatus) *BusPowerStatusUpdateEvent {
+	return &BusPowerStatusUpdateEvent{BaseEvent: BaseEvent{BusPowerStatusUpdateEventId, 0}, Status: status}
+}
+
+func (bps BusPowerStatusUpdateEvent) Pack() ([]byte, error) {
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.BigEndian, bps.Status)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (bps *BusPowerStatusUpdateEvent) Unpack(b []byte) error {
+	buf := bytes.NewReader(b)
+	status := new(device.PowerStatus)
+	err := binary.Read(buf, binary.BigEndian, status)
+	if err != nil {
+		return err
+	}
+	bps.Status = status
+	return nil
+}
+
+func (bps BusPowerStatusUpdateEvent) String() string {
+	return bps.BaseEvent.String() + fmt.Sprintf("Driver voltage=%.1f, current sense=%d, reference voltage=%.2f, status(%x)=%s.",
+		bps.Status.Voltage,
+		bps.Status.CurrentSense,
+		bps.Status.RefLevel,
+		byte(bps.Status.Status), bps.Status.Status)
 }
 
 /****** *******/
 
 const (
-	NoEvent                          EventId = 0
-	ClientHelloEvent                         = 1
-	ServerHelloEvent                         = 2
-	ChannelSubscribeEvent                    = 3
-	ServerAckEvent                           = 4
-	Reserved5Event                           = 5
-	BusPowerStatusUpdateEvent                = 6
-	BusPowerEvent                            = 7
-	ChannelUpdateRequestEvent                = 8
-	ChannelUpdateEvent                       = 9
-	ChannelListRequestEvent                  = 10
-	ChannelListEvent                         = 11
-	NodeUpdateRequestEvent                   = 12
-	NodeUpdateEvent                          = 13
-	NodeListRequestEvent                     = 14
-	NodeListEvent                            = 15
-	NodeFirmwareUploadEvent                  = 16
-	NodeFirmwareDownloadRequestEvent         = 17
-	NodeFirmwareDownloadEvent                = 18
-	NodeFirmwareProgressEvent                = 19
-	NodeRebootRequestEvent                   = 20
-	BusPowerStatusUpdateRequestEvent         = 21
-	DeviceInformationRequestEvent            = 22
-	DeviceInformationEvent                   = 23
-	SystemPropertiesRequestEvent             = 24
-	SystemPropertiesEvent                    = 25
-	EventCount                               = 26
+	NoEventId                          EventId = 0
+	ClientHelloEventId                         = 1
+	ServerHelloEventId                         = 2
+	ChannelFilterEventId                       = 3
+	ServerAckEventId                           = 4
+	Reserved5EventId                           = 5
+	BusPowerStatusUpdateEventId                = 6
+	BusPowerEventId                            = 7
+	ChannelUpdateRequestEventId                = 8
+	ChannelUpdateEventId                       = 9
+	ChannelListRequestEventId                  = 10
+	ChannelListEventId                         = 11
+	NodeUpdateRequestEventId                   = 12
+	NodeUpdateEventId                          = 13
+	NodeListRequestEventId                     = 14
+	NodeListEventId                            = 15
+	NodeFirmwareEventId                        = 16
+	NodeFirmwareDownloadRequestEventId         = 17
+	ReservedEvent16EventId                     = 18
+	NodeFirmwareProgressEventId                = 19
+	NodeRebootRequestEventId                   = 20
+	BusPowerStatusUpdateRequestEventId         = 21
+	DeviceInformationRequestEventId            = 22
+	DeviceInformationEventId                   = 23
+	SystemPropertiesRequestEventId             = 24
+	SystemPropertiesEventId                    = 25
+	EventIdCount                               = 26
 )
 
-var EventNames = [EventCount]string{
+var EventNames = [EventIdCount]string{
 	"no-event",
 	"client-hello-event",
 	"server-hello-event",
@@ -935,7 +1216,7 @@ func LookupEventByName(name string) EventId {
 }
 
 func (eid EventId) String() string {
-	if eid < EventCount {
+	if eid < EventIdCount {
 		return EventNames[eid]
 	}
 	return "unknown-event"
