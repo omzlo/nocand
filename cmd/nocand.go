@@ -41,6 +41,7 @@ func BaseFlagSet(cmd string) *flag.FlagSet {
 	fs.UintVar(&config.Settings.CurrentLimit, "current-limit", config.Settings.CurrentLimit, "Current limit level (default=0 -> don't change)")
 	fs.Var(config.Settings.LogFile, "log-file", "Log file name, if empty no log file is created.")
 	fs.StringVar(&config.Settings.LogTerminal, "log-terminal", config.Settings.LogTerminal, "Log to terminal (choices: 'plain', 'color' or 'none').")
+	fs.BoolVar(&config.Settings.CanTermination, "can-termination", config.Settings.CanTermination, "Enable CAN bus 120 ohm termination resistor (default: true).")
 	return fs
 }
 
@@ -128,6 +129,10 @@ func init_pimaster() error {
 
 	if config.Settings.CurrentLimit > 0 {
 		controllers.Bus.SetCurrentLimit(uint16(config.Settings.CurrentLimit))
+	}
+	controllers.Bus.SetCanTermination(config.Settings.CanTermination)
+	if config.Settings.CanTermination == false {
+		clog.Info("Disabling on-board CAN bus termination")
 	}
 	return nil
 }

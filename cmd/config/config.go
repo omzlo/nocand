@@ -20,6 +20,7 @@ type Configuration struct {
 	LogFile                 *helpers.FilePath `toml:"log-file"`
 	NodeCache               *helpers.FilePath `toml:"node-cache"`
 	CheckForUpdates         bool              `toml:"check-for-updates"`
+	CanTermination          bool              `toml:"can-termination"`
 }
 
 var Settings = Configuration{
@@ -37,6 +38,7 @@ var Settings = Configuration{
 	LogFile:                 DefaultLogFile,
 	NodeCache:               DefaultNodeCacheFile,
 	CheckForUpdates:         true,
+	CanTermination:          true,
 }
 
 var (

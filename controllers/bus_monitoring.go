@@ -56,6 +56,10 @@ func (nc *NocanNetworkController) SetPower(power_on bool) {
 	EventServer.Broadcast(socket.BusPowerEvent, power_on)
 }
 
+func (nc *NocanNetworkController) SetCanTermination(term bool) {
+	rpi.DriverSetCanResistor(term)
+}
+
 func (nci *NocanNetworkController) SetCurrentLimit(limit uint16) {
 	rpi.DriverSetCurrentLimit(limit)
 	clog.DebugX("Driver current limit set to %d (~ %d mA)", limit, MilliAmpEstimation(limit))
