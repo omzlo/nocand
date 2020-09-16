@@ -121,7 +121,7 @@ func (nc *NocanNetworkController) pinger(interval time.Duration) {
 		for _, node := range dequeue {
 			clog.Info("Unregistering node %d due to unresponsiveness.", node.Id)
 			node.State = models.NodeStateUnresponsive
-			EventServer.Broadcast(socket.NodeUpdateEvent, socket.NewNodeUpdate(node.Id, node.State, node.Udid, node.LastSeen))
+			EventServer.Broadcast(socket.NodeUpdateEvent, socket.NewNodeUpdate(node.Id, node.State, node.Udid, node.LastSeen), nil)
 			Nodes.Unregister(node)
 		}
 		time.Sleep(interval)
@@ -260,7 +260,7 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 		switch nocan.MessageType(fn) {
 		case nocan.SYS_ADDRESS_CONFIGURE_ACK:
 			node.State = models.NodeStateConnected
-			EventServer.Broadcast(socket.NodeUpdateEvent, socket.NewNodeUpdate(node.Id, node.State, node.Udid, node.LastSeen))
+			EventServer.Broadcast(socket.NodeUpdateEvent, socket.NewNodeUpdate(node.Id, node.State, node.Udid, node.LastSeen), nil)
 
 		case nocan.SYS_NODE_BOOT_ACK:
 			node.State = models.NodeStateBootloader
@@ -309,7 +309,7 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 			} else {
 				clog.Info("Registered channel %s for node %d as %d", channel_name, msg.NodeId(), channel.Id)
 				nc.SendSystemMessage(msg.NodeId(), nocan.SYS_CHANNEL_REGISTER_ACK, 0x00, channel.Id.ToBytes())
-				EventServer.Broadcast(socket.ChannelUpdateEvent, socket.NewChannelUpdate(channel.Name, channel.Id, socket.CHANNEL_CREATED, nil))
+				EventServer.Broadcast(socket.ChannelUpdateEvent, socket.NewChannelUpdate(channel.Name, channel.Id, socket.CHANNEL_CREATED, nil), nil)
 			}
 
 		case nocan.SYS_CHANNEL_LOOKUP:
@@ -337,7 +337,7 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 		if channel != nil {
 			clog.Info("Updated content of channel '%s' (id=%d) to %q", channel.Name, msg.ChannelId(), msg.Bytes())
 			channel.SetContent(msg.Bytes())
-			EventServer.Broadcast(socket.ChannelUpdateEvent, socket.NewChannelUpdate(channel.Name, channel.Id, socket.CHANNEL_UPDATED, msg.Bytes()))
+			EventServer.Broadcast(socket.ChannelUpdateEvent, socket.NewChannelUpdate(channel.Name, channel.Id, socket.CHANNEL_UPDATED, msg.Bytes()), nil)
 		} else {
 			clog.Warning("Could not unpdate non-existing channel %d for node %s", msg.ChannelId(), msg.NodeId())
 		}

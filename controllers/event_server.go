@@ -13,30 +13,6 @@ import (
 var EventServer *socket.Server
 var SystemProperties *properties.Properties = properties.New()
 
-/*
-func clientChannelCreateDestroyHandler(c *socket.Client, eid socket.EventId, value []byte) error {
-	var cu socket.ChannelUpdate
-	var err error
-
-	err = cu.UnpackValue(value)
-	if err == nil {
-		if eid == socket.ChannelCreateEvent {
-			_, err = Channels.Register(cu.Name)
-		} else {
-			channel := Channels.Lookup(cu.Name)
-			if channel != nil {
-				if !Channels.Unregister(channel) {
-					err = fmt.Errorf("Could not unregister channel %s", cu.Name)
-				}
-			} else {
-				err = fmt.Errorf("Channel %s does not exist", cu.Name)
-			}
-		}
-	}
-	return err
-}
-*/
-
 func clientChannelUpdateRequestHandler(c *socket.Client, eid socket.EventId, value []byte) error {
 	var cur socket.ChannelUpdateRequest
 	var cu *socket.ChannelUpdate
@@ -93,8 +69,9 @@ func clientChannelUpdateHandler(c *socket.Client, eid socket.EventId, value []by
 		if cu.Status == socket.CHANNEL_UPDATED {
 			channel.SetContent(cu.Value)
 			Bus.Publish(0, channel.Id, cu.Value)
-			clog.DebugXX("Broadcasting %q", cu.Value)
-			EventServer.Broadcast(socket.ChannelUpdateEvent, socket.NewChannelUpdate(channel.Name, channel.Id, socket.CHANNEL_UPDATED, cu.Value))
+			clog.DebugXX("Broadcasting channel update on %s: %q", cu.Name, cu.Value)
+			//c.Put(socket.ServerAckEvent, socket.SERVER_ACK_SUCCESS)
+			EventServer.Broadcast(socket.ChannelUpdateEvent, socket.NewChannelUpdate(channel.Name, channel.Id, socket.CHANNEL_UPDATED, cu.Value), c)
 		}
 		if cu.Status == socket.CHANNEL_DESTROYED {
 			if !Channels.Unregister(channel) {
@@ -103,7 +80,7 @@ func clientChannelUpdateHandler(c *socket.Client, eid socket.EventId, value []by
 			}
 		}
 	}
-	return c.Put(socket.ServerAckEvent, socket.SERVER_ACK_SUCCESS)
+	return nil
 }
 
 func clientChannelListRequestHandler(c *socket.Client, eid socket.EventId, value []byte) error {

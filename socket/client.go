@@ -226,7 +226,6 @@ func (conn *EventConn) _requestChannelUpdate(channelId nocan.ChannelId, channelN
 		return err
 	}
 	return nil
-
 }
 
 func (conn *EventConn) RequestChannelUpdate(channelId nocan.ChannelId) error {
@@ -241,6 +240,7 @@ func (conn *EventConn) _sendChannelUpdate(channelId nocan.ChannelId, channelName
 	if err := conn.Put(ChannelUpdateEvent, NewChannelUpdate(channelName, channelId, CHANNEL_UPDATED, channelValue)); err != nil {
 		return err
 	}
+	//return conn.GetAck()
 	return nil
 }
 

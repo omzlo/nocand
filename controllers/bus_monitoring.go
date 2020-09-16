@@ -29,7 +29,7 @@ func (nc *NocanNetworkController) RequestPowerStatusUpdate() {
 		} else {
 			clog.DebugX("Driver voltage=%.1f, current sense=%d (~ %d mA), reference voltage=%.2f, status(%x)=%s.", ps.Voltage, ps.CurrentSense, MilliAmpEstimation(ps.CurrentSense), ps.RefLevel, byte(ps.Status), ps.Status)
 		}
-		EventServer.Broadcast(socket.BusPowerStatusUpdateEvent, ps)
+		EventServer.Broadcast(socket.BusPowerStatusUpdateEvent, ps, nil)
 	}
 }
 
@@ -53,7 +53,7 @@ func (nc *NocanNetworkController) SetPower(power_on bool) {
 	if power_on == false {
 		Nodes.Clear()
 	}
-	EventServer.Broadcast(socket.BusPowerEvent, power_on)
+	EventServer.Broadcast(socket.BusPowerEvent, power_on, nil)
 }
 
 func (nc *NocanNetworkController) SetCanTermination(term bool) {
@@ -63,4 +63,13 @@ func (nc *NocanNetworkController) SetCanTermination(term bool) {
 func (nci *NocanNetworkController) SetCurrentLimit(limit uint16) {
 	rpi.DriverSetCurrentLimit(limit)
 	clog.DebugX("Driver current limit set to %d (~ %d mA)", limit, MilliAmpEstimation(limit))
+}
+
+func (nci *NocanNetworkController) SetTerminationResistor(set bool) {
+	rpi.DriverSetCanResistor(set)
+	if !set {
+		clog.Info("Termination resistor disabled.")
+	} else {
+		clog.DebugX("Termination resistor enabled (default).")
+	}
 }
