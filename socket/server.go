@@ -32,7 +32,7 @@ func (c *ClientDescriptor) Name() string {
 
 func (c *ClientDescriptor) SendEvent(event Eventer) error {
 	if !c.Connected {
-		return fmt.Errorf("Put failed, client %s is not connected", c)
+		return fmt.Errorf("SendEvent failed, client %d is not connected", c.Id)
 	}
 	c.OutputChan <- event
 	return nil
@@ -106,7 +106,7 @@ func (s *Server) DeleteClient(c *ClientDescriptor) bool {
 	for *ptr != nil {
 		if *ptr == c {
 			*ptr = c.Next
-			clog.DebugXX("Deleting client %s, closing channel and socket", c)
+			clog.DebugXX("Deleting client %s, closing channel and socket", c.Name())
 			return true
 		}
 		ptr = &((*ptr).Next)
@@ -148,12 +148,32 @@ func dumpValue(value []byte) string {
 }
 
 func (s *Server) runClient(c *ClientDescriptor) {
+	e, err := DecodeEvent(c.Conn)
+	if err != nil {
+		clog.Warning("Could not decode client-hello-event: %s", err)
+		return
+	}
+
+	client_hello, ok := e.(*ClientHelloEvent)
+	if !ok {
+		clog.Warning("Expected client-hello-event got %s instead.", e.Id())
+		return
+	}
+
+	server_hello := NewServerHelloEvent("nocand", 0, 0)
+	server_hello.SetMsgId(client_hello.MsgId())
+	if err := EncodeEvent(c.Conn, server_hello); err != nil {
+		clog.Warning("Could not encode server-hello-event: %s", err)
+		return
+	}
+	c.LastMsgId = client_hello.MsgId()
+
 	go func() {
 		for {
 			select {
 			case event := <-c.OutputChan:
 				if err := EncodeEvent(c.Conn, event); err != nil {
-					clog.Warning("Client %s: %s", c, err)
+					clog.Warning("Client %s: %s", c.Name(), err)
 					c.TerminationChan <- true
 				}
 			case <-c.TerminationChan:
@@ -168,14 +188,14 @@ func (s *Server) runClient(c *ClientDescriptor) {
 
 		if err != nil {
 			if err == io.EOF {
-				clog.Info("Client %s closed connection", c)
+				clog.Info("Client %s closed connection", c.Name())
 			} else {
-				clog.Warning("Client %s: %s", c, err)
+				clog.Warning("Client %s: %s", c.Name(), err)
 			}
 			break
 		}
 
-		clog.DebugX("Processing event %s(%d) from client %s", event.Id(), event.Id(), c)
+		clog.DebugX("Processing event %s(%d) from client %s", event.Id(), event.Id(), c.Name())
 
 		if event.MsgId() != 0 {
 			c.LastMsgId++
@@ -217,8 +237,9 @@ func (s *Server) ListenAndServe(addr string, auth_token string) error {
 			if err != nil {
 				clog.Error("Server could not accept connection: %s", err)
 			} else {
+
+				clog.Debug("Created and authenticated new client %s", conn.RemoteAddr())
 				client := s.NewClient(conn)
-				clog.Debug("Created and authenticated new client %s", client)
 				go s.runClient(client)
 			}
 		}

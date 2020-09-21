@@ -2,6 +2,7 @@ package socket
 
 import (
 	"fmt"
+	"github.com/omzlo/clog"
 	"io"
 )
 
@@ -37,7 +38,7 @@ func (e *BaseEvent) SetMsgId(mid uint16) {
 }
 
 func (e BaseEvent) String() string {
-	return fmt.Sprintf("%s(%d)", e.eventId, e.eventId)
+	return fmt.Sprintf("%s(%d)\t", e.eventId, e.eventId)
 }
 
 //
@@ -93,9 +94,11 @@ func EncodeEvent(w io.Writer, e Eventer) error {
 	dest = append(dest, packLength(uint(len(pv)))...)
 	dest = append(dest, pv...)
 
+	fmt.Printf(">>> Sending %q\n", dest)
+
 	_, err = w.Write(dest)
 	if err != nil {
-		return fmt.Errorf("Failed to write %d bytes for value of encoded event %d, %s", len(dest), e.Id, err)
+		return fmt.Errorf("Failed to write %d bytes for value of encoded event %d, %s", len(dest), e.Id(), err)
 	}
 	return nil
 }
@@ -110,7 +113,9 @@ func DecodeEvent(r io.Reader) (Eventer, error) {
 		return nil, err
 	}
 
-	msgId := uint16(rbuf[1]<<8) | uint16(rbuf[0])
+	fmt.Printf(">>> Receiving %q ", rbuf[:])
+
+	msgId := (uint16(rbuf[0]) << 8) | uint16(rbuf[1])
 	eventId := EventId(rbuf[2])
 
 	if rbuf[3] <= 0x80 {
@@ -142,6 +147,9 @@ func DecodeEvent(r io.Reader) (Eventer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Expected %d bytes, but got %d bytes while decoding value for event %d (%s), %s", rlen, re, eventId, eventId, err)
 	}
+	fmt.Printf("%q\n", dbuf[:rlen])
+
+	clog.DebugXX("Got message %d with event %s(%d) and %d bytes of payload", msgId, eventId, eventId, rlen)
 
 	var x Eventer
 	switch eventId {

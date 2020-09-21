@@ -3,6 +3,7 @@ package socket
 import (
 	"errors"
 	"fmt"
+	"github.com/omzlo/clog"
 	"github.com/omzlo/go-sscp"
 	"sync"
 	"time"
@@ -150,10 +151,13 @@ func (conn *EventConn) Send(event Eventer) error {
 		return fmt.Errorf("MsgId mismatch is reponse to request %s (request MsgId: %d, response MsgId: %d)", event.Id(), event.MsgId(), response.MsgId())
 	}
 
+	conn.MsgId++
+
 	return ack.ToError()
 }
 
 func (conn *EventConn) Close() error {
+	clog.DebugXX("Closing connection to %s", conn.Conn.RemoteAddr())
 	conn.Connected = false
 	return conn.Conn.Close()
 }
@@ -214,6 +218,7 @@ func (conn *EventConn) DispatchEvents() error {
 		/* Process events */
 		event, err := conn.processNextEvent()
 		if err != nil {
+			clog.DebugXX("Event processing returned: %s", err)
 			conn.Close()
 			if err == Terminate {
 				return nil

@@ -86,11 +86,11 @@ type ClientHelloEvent struct {
 }
 
 func NewClientHelloEvent(tool string, major byte, minor byte) *ClientHelloEvent {
-	return &ClientHelloEvent{BaseEvent: BaseEvent{ClientHelloEventId, 0}, Tool: tool, VersionMajor: major, VersionMinor: minor}
+	return &ClientHelloEvent{BaseEvent: BaseEvent{0, ClientHelloEventId}, Tool: tool, VersionMajor: major, VersionMinor: minor}
 }
 
 func (ch *ClientHelloEvent) Pack() ([]byte, error) {
-	b := make([]byte, len(ch.Tool)+3, 0)
+	b := make([]byte, 0, len(ch.Tool)+3)
 	b = append(b, byte(len(ch.Tool)))
 	b = append(b, []byte(ch.Tool)...)
 	b = append(b, ch.VersionMajor)
@@ -115,7 +115,7 @@ type ServerHelloEvent struct {
 }
 
 func NewServerHelloEvent(tool string, major byte, minor byte) *ServerHelloEvent {
-	return &ServerHelloEvent{ClientHelloEvent{BaseEvent: BaseEvent{ServerHelloEventId, 0}, Tool: tool, VersionMajor: major, VersionMinor: minor}}
+	return &ServerHelloEvent{ClientHelloEvent{BaseEvent: BaseEvent{0, ServerHelloEventId}, Tool: tool, VersionMajor: major, VersionMinor: minor}}
 }
 
 /****************************************************************************/
@@ -129,7 +129,7 @@ type ChannelFilterEvent struct {
 }
 
 func NewChannelFilterEvent(chans ...nocan.ChannelId) *ChannelFilterEvent {
-	clist := &ChannelFilterEvent{BaseEvent: BaseEvent{ChannelFilterEventId, 0}, Channels: make(map[nocan.ChannelId]bool)}
+	clist := &ChannelFilterEvent{BaseEvent: BaseEvent{0, ChannelFilterEventId}, Channels: make(map[nocan.ChannelId]bool)}
 	clist.Add(chans...)
 	return clist
 }
@@ -225,7 +225,7 @@ var (
 )
 
 func NewServerAckEvent(val byte) *ServerAckEvent {
-	return &ServerAckEvent{BaseEvent: BaseEvent{ServerAckEventId, 0}, Code: val}
+	return &ServerAckEvent{BaseEvent: BaseEvent{0, ServerAckEventId}, Code: val}
 }
 
 func (sa *ServerAckEvent) Pack() ([]byte, error) {
@@ -280,7 +280,7 @@ type ChannelUpdateRequestEvent struct {
 }
 
 func NewChannelUpdateRequestEvent(chan_name string, chan_id nocan.ChannelId) *ChannelUpdateRequestEvent {
-	return &ChannelUpdateRequestEvent{BaseEvent: BaseEvent{ChannelUpdateRequestEventId, 0}, ChannelId: chan_id, ChannelName: chan_name}
+	return &ChannelUpdateRequestEvent{BaseEvent: BaseEvent{0, ChannelUpdateRequestEventId}, ChannelId: chan_id, ChannelName: chan_name}
 }
 
 func (cu *ChannelUpdateRequestEvent) PackedLength() int {
@@ -380,7 +380,7 @@ func NewChannelUpdateEvent(chan_name string, chan_id nocan.ChannelId, status Cha
 	} else {
 		v = nil
 	}
-	return &ChannelUpdateEvent{BaseEvent: BaseEvent{ChannelUpdateEventId, 0}, ChannelId: chan_id, ChannelName: chan_name, Status: status, Value: v}
+	return &ChannelUpdateEvent{BaseEvent: BaseEvent{0, ChannelUpdateEventId}, ChannelId: chan_id, ChannelName: chan_name, Status: status, Value: v}
 }
 
 func (cu *ChannelUpdateEvent) PackedLength() int {
@@ -466,7 +466,7 @@ type ChannelListRequestEvent struct {
 }
 
 func NewChannelListRequestEvent() *ChannelListRequestEvent {
-	return &ChannelListRequestEvent{EmptyEvent{BaseEvent{ChannelListRequestEventId, 0}}}
+	return &ChannelListRequestEvent{EmptyEvent{BaseEvent{0, ChannelListRequestEventId}}}
 }
 
 // ChannelListEvent
@@ -478,7 +478,7 @@ type ChannelListEvent struct {
 }
 
 func NewChannelListEvent() *ChannelListEvent {
-	return &ChannelListEvent{BaseEvent: BaseEvent{ChannelListEventId, 0}, Channels: make([]*ChannelUpdateEvent, 0, 8)}
+	return &ChannelListEvent{BaseEvent: BaseEvent{0, ChannelListEventId}, Channels: make([]*ChannelUpdateEvent, 0, 8)}
 }
 
 func (cl *ChannelListEvent) Append(cu *ChannelUpdateEvent) {
@@ -538,7 +538,7 @@ type NodeUpdateRequestEvent struct {
 }
 
 func NewNodeUpdateRequestEvent(node_id nocan.NodeId) *NodeUpdateRequestEvent {
-	return &NodeUpdateRequestEvent{BaseEvent: BaseEvent{NodeUpdateRequestEventId, 0}, NodeId: node_id}
+	return &NodeUpdateRequestEvent{BaseEvent: BaseEvent{0, NodeUpdateRequestEventId}, NodeId: node_id}
 }
 
 func (nu NodeUpdateRequestEvent) Pack() ([]byte, error) {
@@ -572,7 +572,7 @@ type NodeUpdateEvent struct {
 }
 
 func NewNodeUpdateEvent(id nocan.NodeId, state models.NodeState, udid models.Udid8, last_seen time.Time) *NodeUpdateEvent {
-	nu := &NodeUpdateEvent{BaseEvent: BaseEvent{NodeUpdateEventId, 0}, NodeId: id, State: state, LastSeen: last_seen.UTC()}
+	nu := &NodeUpdateEvent{BaseEvent: BaseEvent{0, NodeUpdateEventId}, NodeId: id, State: state, LastSeen: last_seen.UTC()}
 	copy(nu.Udid[:], udid[:])
 	return nu
 }
@@ -612,7 +612,7 @@ type NodeListEvent struct {
 }
 
 func NewNodeListEvent() *NodeListEvent {
-	return &NodeListEvent{BaseEvent: BaseEvent{NodeListEventId, 0}, Nodes: make([]*NodeUpdateEvent, 0, 8)}
+	return &NodeListEvent{BaseEvent: BaseEvent{0, NodeListEventId}, Nodes: make([]*NodeUpdateEvent, 0, 8)}
 }
 
 func (nl *NodeListEvent) Append(nu *NodeUpdateEvent) {
@@ -661,7 +661,7 @@ type NodeListRequestEvent struct {
 }
 
 func NewNodeListRequestEvent() *NodeListRequestEvent {
-	return &NodeListRequestEvent{EmptyEvent{BaseEvent{NodeListRequestEventId, 0}}}
+	return &NodeListRequestEvent{EmptyEvent{BaseEvent{0, NodeListRequestEventId}}}
 }
 
 // NodeFirmwareDownloadRequestEvent
@@ -674,7 +674,7 @@ type NodeFirmwareDownloadRequestEvent struct {
 }
 
 func NewNodeFirmwareDownloadRequestEvent(nid nocan.NodeId) *NodeFirmwareDownloadRequestEvent {
-	return &NodeFirmwareDownloadRequestEvent{BaseEvent: BaseEvent{NodeFirmwareDownloadRequestEventId, 0}, NodeId: nid}
+	return &NodeFirmwareDownloadRequestEvent{BaseEvent: BaseEvent{0, NodeFirmwareDownloadRequestEventId}, NodeId: nid}
 }
 
 func (ndr NodeFirmwareDownloadRequestEvent) Pack() ([]byte, error) {
@@ -709,7 +709,7 @@ type NodeFirmwareEvent struct {
 }
 
 func NewNodeFirmwareEvent(id nocan.NodeId) *NodeFirmwareEvent {
-	return &NodeFirmwareEvent{BaseEvent: BaseEvent{NodeFirmwareEventId, 0}, NodeId: id, Limit: 0, Code: make([]FirmwareBlock, 0, 8)}
+	return &NodeFirmwareEvent{BaseEvent: BaseEvent{0, NodeFirmwareEventId}, NodeId: id, Limit: 0, Code: make([]FirmwareBlock, 0, 8)}
 }
 
 func (nf *NodeFirmwareEvent) ConfigureAsDownload() *NodeFirmwareEvent {
@@ -818,11 +818,11 @@ type NodeFirmwareProgressEvent struct {
 }
 
 func NewNodeFirmwareProgressEvent(id nocan.NodeId) *NodeFirmwareProgressEvent {
-	return &NodeFirmwareProgressEvent{BaseEvent: BaseEvent{NodeFirmwareProgressEventId, 0}, NodeId: id, Progress: 0, BytesTransferred: 0}
+	return &NodeFirmwareProgressEvent{BaseEvent: BaseEvent{0, NodeFirmwareProgressEventId}, NodeId: id, Progress: 0, BytesTransferred: 0}
 }
 
 func (nfp *NodeFirmwareProgressEvent) Update(progress ProgressReport, transferred uint32) *NodeFirmwareProgressEvent {
-	return &NodeFirmwareProgressEvent{BaseEvent: BaseEvent{NodeFirmwareProgressEventId, 0}, NodeId: nfp.NodeId, Progress: progress, BytesTransferred: transferred}
+	return &NodeFirmwareProgressEvent{BaseEvent: BaseEvent{0, NodeFirmwareProgressEventId}, NodeId: nfp.NodeId, Progress: progress, BytesTransferred: transferred}
 }
 
 func (nfp *NodeFirmwareProgressEvent) MarkAsFailed() *NodeFirmwareProgressEvent {
@@ -865,7 +865,7 @@ type BusPowerEvent struct {
 }
 
 func NewBusPowerEvent(power_on bool) *BusPowerEvent {
-	return &BusPowerEvent{BaseEvent: BaseEvent{BusPowerEventId, 0}, PowerOn: power_on}
+	return &BusPowerEvent{BaseEvent: BaseEvent{0, BusPowerEventId}, PowerOn: power_on}
 }
 
 func (bp BusPowerEvent) Pack() ([]byte, error) {
@@ -895,7 +895,7 @@ type BusPowerStatusUpdateRequestEvent struct {
 }
 
 func NewBusPowerStatusUpdateRequestEvent() *BusPowerStatusUpdateRequestEvent {
-	return &BusPowerStatusUpdateRequestEvent{EmptyEvent{BaseEvent{BusPowerStatusUpdateRequestEventId, 0}}}
+	return &BusPowerStatusUpdateRequestEvent{EmptyEvent{BaseEvent{0, BusPowerStatusUpdateRequestEventId}}}
 }
 
 //
@@ -907,7 +907,7 @@ type DeviceInformationRequestEvent struct {
 }
 
 func NewDeviceInformationRequestEvent() *DeviceInformationRequestEvent {
-	return &DeviceInformationRequestEvent{EmptyEvent{BaseEvent{DeviceInformationRequestEventId, 0}}}
+	return &DeviceInformationRequestEvent{EmptyEvent{BaseEvent{0, DeviceInformationRequestEventId}}}
 }
 
 //
@@ -919,7 +919,7 @@ type SystemPropertiesRequestEvent struct {
 }
 
 func NewSystemPropertiesRequestEvent() *SystemPropertiesRequestEvent {
-	return &SystemPropertiesRequestEvent{EmptyEvent{BaseEvent{SystemPropertiesRequestEventId, 0}}}
+	return &SystemPropertiesRequestEvent{EmptyEvent{BaseEvent{0, SystemPropertiesRequestEventId}}}
 }
 
 //
@@ -936,7 +936,7 @@ func NewNodeRebootRequestEvent(nid nocan.NodeId, force bool) *NodeRebootRequestE
 	if force {
 		rid |= 128
 	}
-	return &NodeRebootRequestEvent{BaseEvent: BaseEvent{NodeRebootRequestEventId, 0}, RebootId: rid}
+	return &NodeRebootRequestEvent{BaseEvent: BaseEvent{0, NodeRebootRequestEventId}, RebootId: rid}
 }
 
 func (nr NodeRebootRequestEvent) NodeId() nocan.NodeId {
@@ -962,7 +962,7 @@ func (nr *NodeRebootRequestEvent) Unpack(b []byte) error {
 }
 
 func (nr NodeRebootRequestEvent) String() string {
-	return nr.BaseEvent.String() + fmt.Sprintf("%d %t", nr.NodeId(), nr.Forced)
+	return nr.BaseEvent.String() + fmt.Sprintf("%d %t", nr.NodeId(), nr.Forced())
 }
 
 //
@@ -975,7 +975,7 @@ type DeviceInformationEvent struct {
 }
 
 func NewDeviceInformationEvent(di *device.Information) *DeviceInformationEvent {
-	return &DeviceInformationEvent{BaseEvent: BaseEvent{DeviceInformationEventId, 0}, Information: di}
+	return &DeviceInformationEvent{BaseEvent: BaseEvent{0, DeviceInformationEventId}, Information: di}
 }
 
 func (ie DeviceInformationEvent) Pack() ([]byte, error) {
@@ -1016,7 +1016,10 @@ type SystemPropertiesEvent struct {
 }
 
 func NewSystemPropertiesEvent(props *properties.Properties) *SystemPropertiesEvent {
-	return &SystemPropertiesEvent{BaseEvent: BaseEvent{SystemPropertiesEventId, 0}, Properties: props}
+	if props == nil {
+		props = properties.New()
+	}
+	return &SystemPropertiesEvent{BaseEvent: BaseEvent{0, SystemPropertiesEventId}, Properties: props}
 }
 
 func (sp SystemPropertiesEvent) Pack() ([]byte, error) {
@@ -1054,7 +1057,7 @@ func (sp *SystemPropertiesEvent) Unpack(b []byte) error {
 	var ptype byte
 	var err error
 
-	sp.Properties.Clear()
+	sp.Properties = properties.New()
 
 	buf := bytes.NewReader(b)
 
@@ -1088,7 +1091,7 @@ func (sp *SystemPropertiesEvent) Unpack(b []byte) error {
 			sp.Properties.AddBool(string(key), b)
 		case properties.PROP_TYPE_STRING:
 			var slen byte
-			if len, err = buf.ReadByte(); err != nil {
+			if slen, err = buf.ReadByte(); err != nil {
 				return err
 			}
 			sval := make([]byte, slen)
@@ -1097,7 +1100,7 @@ func (sp *SystemPropertiesEvent) Unpack(b []byte) error {
 			}
 			sp.Properties.AddString(string(key), string(sval))
 		default:
-			return fmt.Errorf("Unexpected type %d unpacking Property", ptype)
+			return fmt.Errorf("Unexpected type %d unpacking property '%s'", ptype, string(key))
 		}
 	}
 	return nil
@@ -1117,7 +1120,7 @@ type BusPowerStatusUpdateEvent struct {
 }
 
 func NewBusPowerStatusUpdateEvent(status *device.PowerStatus) *BusPowerStatusUpdateEvent {
-	return &BusPowerStatusUpdateEvent{BaseEvent: BaseEvent{BusPowerStatusUpdateEventId, 0}, Status: status}
+	return &BusPowerStatusUpdateEvent{BaseEvent: BaseEvent{0, BusPowerStatusUpdateEventId}, Status: status}
 }
 
 func (bps BusPowerStatusUpdateEvent) Pack() ([]byte, error) {
@@ -1204,7 +1207,7 @@ var EventNames = [EventIdCount]string{
 	"node-reboot-request-event",
 	"bus-power-status-update-request-event",
 	"device-information-request-event",
-	"device-information--event",
+	"device-information-event",
 	"system-properties-request-event",
 	"system-properties-event",
 }
