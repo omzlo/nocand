@@ -115,7 +115,7 @@ func uploadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 				Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_WRITE, 0, data[:rlen])
 				if _, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_WRITE_ACK); err != nil {
 					op.Client.SendEvent(op.Progress.MarkAsFailed())
-					return fmt.Errorf("SYS_BOOTLOADER_WRITE failed for node %d at address=0x%x, %s", node, address, err)
+					return fmt.Errorf("SYS_BOOTLOADER_WRITE failed for node %d at address=0x%x, %s", node.Id, address, err)
 				}
 				total_uploaded += uint32(rlen)
 			}
@@ -125,12 +125,12 @@ func uploadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 			response, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_WRITE_ACK)
 			if err != nil {
 				op.Client.SendEvent(op.Progress.MarkAsFailed())
-				return fmt.Errorf("Final SYS_BOOTLOADER_WRITE failed for node %d at address=0x%x, %s", node, address, err)
+				return fmt.Errorf("Final SYS_BOOTLOADER_WRITE failed for node %d at address=0x%x, %s", node.Id, address, err)
 			}
 			if response.SystemParam() == 0xFF {
 				crc_r := bytesToUint32(response.Bytes())
 				op.Client.SendEvent(op.Progress.MarkAsFailed())
-				return fmt.Errorf("SYS_BOOTLOADER_WRITE failed for node %d at address=0x%x, CRC32 mismatch, expected=%x go %x", node, address, crc, crc_r)
+				return fmt.Errorf("SYS_BOOTLOADER_WRITE failed for node %d at address=0x%x, CRC32 mismatch, expected=%x go %x", node.Id, address, crc, crc_r)
 			}
 
 			// TODO: check return code in ACK
@@ -178,7 +178,7 @@ func downloadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 			response, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_READ_ACK)
 			if err != nil {
 				op.Client.SendEvent(op.Progress.MarkAsFailed())
-				return fmt.Errorf("NOCAN_SYS_BOOTLOADER_READ failed for node %d at address=0x%x, %s", node, address, err)
+				return fmt.Errorf("NOCAN_SYS_BOOTLOADER_READ failed for node %d at address=0x%x, %s", node.Id, address, err)
 			}
 
 			block = append(block, response.Bytes()...)

@@ -42,7 +42,8 @@ var Settings = Configuration{
 }
 
 var (
-	DefaultConfigFile    *helpers.FilePath = helpers.HomeDir().Append(".nocand", "config")
-	DefaultNodeCacheFile *helpers.FilePath = helpers.HomeDir().Append(".nocand", "cache")
-	DefaultLogFile       *helpers.FilePath = helpers.NewFilePath()
+	DefaultNocancConfigFile *helpers.FilePath = helpers.HomeDir().Append(".nocanc.conf")
+	DefaultConfigFile       *helpers.FilePath = helpers.HomeDir().Append(".nocand", "config")
+	DefaultNodeCacheFile    *helpers.FilePath = helpers.HomeDir().Append(".nocand", "cache")
+	DefaultLogFile          *helpers.FilePath = helpers.NewFilePath()
 )

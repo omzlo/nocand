@@ -121,7 +121,7 @@ func (nc *NocanNetworkController) pinger(interval time.Duration) {
 		for _, node := range dequeue {
 			clog.Info("Unregistering node %d due to unresponsiveness.", node.Id)
 			node.State = models.NodeStateUnresponsive
-			EventServer.Broadcast(socket.NewNodeUpdateEvent(node.Id, node.State, node.Udid, node.LastSeen), nil)
+			EventServer.Broadcast(socket.NewNodeUpdateEventWithParams(node.Id, node.State, node.Udid, node.LastSeen), nil)
 			Nodes.Unregister(node)
 		}
 		time.Sleep(interval)
@@ -260,7 +260,7 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 		switch nocan.MessageType(fn) {
 		case nocan.SYS_ADDRESS_CONFIGURE_ACK:
 			node.State = models.NodeStateConnected
-			EventServer.Broadcast(socket.NewNodeUpdateEvent(node.Id, node.State, node.Udid, node.LastSeen), nil)
+			EventServer.Broadcast(socket.NewNodeUpdateEventWithParams(node.Id, node.State, node.Udid, node.LastSeen), nil)
 
 		case nocan.SYS_NODE_BOOT_ACK:
 			node.State = models.NodeStateBootloader
@@ -339,7 +339,7 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 			channel.SetContent(msg.Bytes())
 			EventServer.Broadcast(socket.NewChannelUpdateEvent(channel.Name, channel.Id, socket.CHANNEL_UPDATED, msg.Bytes()), nil)
 		} else {
-			clog.Warning("Could not unpdate non-existing channel %d for node %s", msg.ChannelId(), msg.NodeId())
+			clog.Warning("Could not unpdate non-existing channel %d for node %d", msg.ChannelId(), msg.NodeId())
 		}
 	}
 }

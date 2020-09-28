@@ -14,13 +14,6 @@ const (
 	HELLO_MINOR = 0
 )
 
-type RequestEvent struct {
-	Timestamp time.Time
-	Callback  EventCallback
-	Next      *RequestEvent
-	Prev      *RequestEvent
-}
-
 type EventCallback func(*EventConn, Eventer) error
 
 /****************************************************************************/
@@ -29,17 +22,19 @@ type EventCallback func(*EventConn, Eventer) error
 //
 //
 type EventConn struct {
-	Conn           *sscp.Conn
-	Addr           string
-	ClientName     string
-	AuthToken      string
-	Connected      bool
-	AutoRedial     bool
-	MsgId          uint16
-	Callbacks      map[EventId]EventCallback
-	processError   func(*EventConn, error) error
-	processConnect func(*EventConn) error
-	Mutex          sync.Mutex
+	Conn               *sscp.Conn
+	Addr               string
+	ClientName         string
+	AuthToken          string
+	Connected          bool
+	AutoRedial         bool
+	MsgId              uint16
+	Callbacks          map[EventId]EventCallback
+	processError       func(*EventConn, error) error
+	processConnect     func(*EventConn) error
+	Mutex              sync.Mutex
+	ResponseChannel    chan (Eventer)
+	inProcessNextEvent bool
 }
 
 func defaultProcessError(conn *EventConn, err error) error {
@@ -56,14 +51,16 @@ func NewEventConn(addr string, client_name string, auth string) *EventConn {
 		addr = ":4242"
 	}
 	return &EventConn{Addr: addr,
-		ClientName:     client_name,
-		AuthToken:      auth,
-		Connected:      false,
-		AutoRedial:     true,
-		MsgId:          1,
-		Callbacks:      make(map[EventId]EventCallback),
-		processError:   defaultProcessError,
-		processConnect: defaultProcessConnect}
+		ClientName:      client_name,
+		AuthToken:       auth,
+		Connected:       false,
+		AutoRedial:      true,
+		MsgId:           1,
+		Callbacks:       make(map[EventId]EventCallback),
+		processError:    defaultProcessError,
+		processConnect:  defaultProcessConnect,
+		ResponseChannel: make(chan (Eventer), 1),
+	}
 }
 
 func (conn *EventConn) dial() error {
@@ -137,23 +134,33 @@ func (conn *EventConn) Send(event Eventer) error {
 		return err
 	}
 
-	response, err := conn.processNextEvent()
+	err := conn.processNextEvent()
 	if err != nil {
 		return err
 	}
 
-	ack, ok := response.(*ServerAckEvent)
-	if !ok {
-		return fmt.Errorf("Expectected ServerAckEvent, got %s", response.Id())
+	timeout := time.NewTimer(3 * time.Second)
+
+	select {
+	case response := <-conn.ResponseChannel:
+		if !timeout.Stop() {
+			<-timeout.C
+		}
+		ack, ok := response.(*ServerAckEvent)
+		if !ok {
+			return fmt.Errorf("Expectected ServerAckEvent, got %s", response.Id())
+		}
+
+		if response.MsgId() != event.MsgId() {
+			return fmt.Errorf("MsgId mismatch is reponse to request %s (request MsgId: %d, response MsgId: %d)", event.Id(), event.MsgId(), response.MsgId())
+		}
+
+		conn.MsgId++
+
+		return ack.ToError()
+	case <-timeout.C:
+		return ErrorServerAckTimeout
 	}
-
-	if response.MsgId() != event.MsgId() {
-		return fmt.Errorf("MsgId mismatch is reponse to request %s (request MsgId: %d, response MsgId: %d)", event.Id(), event.MsgId(), response.MsgId())
-	}
-
-	conn.MsgId++
-
-	return ack.ToError()
 }
 
 func (conn *EventConn) Close() error {
@@ -166,12 +173,24 @@ func (conn *EventConn) Connect() error {
 	return conn.dial()
 }
 
-func (conn *EventConn) processNextEvent() (Eventer, error) {
+func (conn *EventConn) processNextEvent() error {
+	// TODO: check if we need atomic change to inProcessNextEvent
+
+	if !conn.inProcessNextEvent {
+		conn.inProcessNextEvent = true
+		err := conn._processNextEvent()
+		conn.inProcessNextEvent = false
+		return err
+	}
+	return nil
+}
+
+func (conn *EventConn) _processNextEvent() error {
 	for {
 		event, err := DecodeEvent(conn.Conn)
 		if err != nil {
 			conn.Close()
-			return nil, err
+			return err
 		}
 
 		if event.MsgId() == 0 {
@@ -180,12 +199,13 @@ func (conn *EventConn) processNextEvent() (Eventer, error) {
 				err := cb(conn, event)
 				if err != nil {
 					if err := conn.processError(conn, err); err != nil {
-						return nil, err
+						return err
 					}
 				}
 			}
 		} else {
-			return event, err
+			conn.ResponseChannel <- event
+			return nil
 		}
 	}
 }
@@ -216,7 +236,7 @@ func (conn *EventConn) DispatchEvents() error {
 		}
 
 		/* Process events */
-		event, err := conn.processNextEvent()
+		err := conn.processNextEvent()
 		if err != nil {
 			clog.DebugXX("Event processing returned: %s", err)
 			conn.Close()
@@ -228,7 +248,5 @@ func (conn *EventConn) DispatchEvents() error {
 			}
 			continue
 		}
-
-		return fmt.Errorf("Unexpected event %s", event.Id())
 	}
 }

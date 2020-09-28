@@ -38,7 +38,11 @@ func (e *BaseEvent) SetMsgId(mid uint16) {
 }
 
 func (e BaseEvent) String() string {
-	return fmt.Sprintf("%s(%d)\t", e.eventId, e.eventId)
+	return fmt.Sprintf("<BaseEvent %s %d>", e.Id(), e.Id())
+}
+
+func CreateEvent(eid EventId) BaseEvent {
+	return BaseEvent{msgId: 0, eventId: eid}
 }
 
 //
@@ -94,7 +98,7 @@ func EncodeEvent(w io.Writer, e Eventer) error {
 	dest = append(dest, packLength(uint(len(pv)))...)
 	dest = append(dest, pv...)
 
-	fmt.Printf(">>> Sending %q\n", dest)
+	// fmt.Printf(">>> Sending %q\n", dest)
 
 	_, err = w.Write(dest)
 	if err != nil {
@@ -113,7 +117,7 @@ func DecodeEvent(r io.Reader) (Eventer, error) {
 		return nil, err
 	}
 
-	fmt.Printf(">>> Receiving %q ", rbuf[:])
+	// fmt.Printf(">>> Receiving %q ", rbuf[:])
 
 	msgId := (uint16(rbuf[0]) << 8) | uint16(rbuf[1])
 	eventId := EventId(rbuf[2])
@@ -147,7 +151,7 @@ func DecodeEvent(r io.Reader) (Eventer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Expected %d bytes, but got %d bytes while decoding value for event %d (%s), %s", rlen, re, eventId, eventId, err)
 	}
-	fmt.Printf("%q\n", dbuf[:rlen])
+	// fmt.Printf("%q\n", dbuf[:rlen])
 
 	clog.DebugXX("Got message %d with event %s(%d) and %d bytes of payload", msgId, eventId, eventId, rlen)
 
@@ -176,7 +180,7 @@ func DecodeEvent(r io.Reader) (Eventer, error) {
 	case NodeUpdateRequestEventId:
 		x = NewNodeUpdateRequestEvent(0)
 	case NodeUpdateEventId:
-		x = new(NodeUpdateEvent)
+		x = NewNodeUpdateEvent()
 	case NodeListRequestEventId:
 		x = NewNodeListRequestEvent()
 	case NodeListEventId:

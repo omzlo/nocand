@@ -93,7 +93,7 @@ func (cc *ChannelCollection) Register(channelName string) (*Channel, error) {
 		cc.TopId++
 	}
 	// normally never reached
-	return nil, errors.New("Maximum numver of channels has been reached")
+	// return nil, errors.New("Maximum numver of channels has been reached")
 }
 
 func (cc *ChannelCollection) Unregister(channel *Channel) bool {

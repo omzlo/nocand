@@ -103,11 +103,11 @@ func (frame *Frame) IsExtended() bool {
 }
 
 func (frame *Frame) IsError() bool {
-	return (frame.CanId >> CANID_MASK_ERROR) != 0
+	return (frame.CanId & CANID_MASK_ERROR) != 0
 }
 
 func (frame *Frame) IsRemote() bool {
-	return (frame.CanId >> CANID_MASK_REMOTE) != 0
+	return (frame.CanId & CANID_MASK_REMOTE) != 0
 }
 
 /*

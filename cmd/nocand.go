@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"github.com/omzlo/clog"
@@ -57,26 +59,47 @@ func PowerFlagSet(cmd string) *flag.FlagSet {
 }
 
 var Commands = helpers.CommandFlagSetList{
-	{"help", nil, HelpFlagSet, "help <command>", "Provide detailed help about a command"},
-	{"power-on", poweron_cmd, BaseFlagSet, "power-on [options]", "Power on the NoCAN network and start"},
-	{"power-off", poweroff_cmd, BaseFlagSet, "power-off [options]", "Power off the NoCAN network and stop"},
-	{"server", server_cmd, ServerFlagSet, "server [options]", "Launch the NoCAN network manager and event server"},
+	{"auth-token", auth_token_cmd, VersionFlagSet, "auth-token", "Generate a secure random auth-token value to store in the configuration file."},
+	{"help", nil, HelpFlagSet, "help [command]", "Provide help about a command"},
+	{"power-on", poweron_cmd, BaseFlagSet, "power-on", "Power on the NoCAN network and start"},
+	{"power-off", poweroff_cmd, BaseFlagSet, "power-off", "Power off the NoCAN network and stop"},
+	{"server", server_cmd, ServerFlagSet, "server", "Launch the NoCAN network manager and event server"},
 	{"version", version_cmd, VersionFlagSet, "version", "Display the version"},
+}
+
+func auth_token_cmd(fs *flag.FlagSet) error {
+	var token [32]byte
+	clog.Sync()
+
+	_, err := rand.Read(token[:])
+	if err != nil {
+		return err
+	}
+	stoken := base64.RawStdEncoding.EncodeToString(token[:])
+
+	fmt.Println("This is a randomly generated value for auth-token that you can safely use in your configuration files.")
+	fmt.Println("")
+	fmt.Printf("auth-token = \"%s\"\n", stoken)
+	fmt.Println("")
+	fmt.Printf("Copy and paste the line above into your nocand configuration file (e.g. '%s') on this machine as well as in the .nocanc.conf file(s) on hosts where you use the nocanc client. ", config.DefaultConfigFile)
+	if config.DefaultNocancConfigFile.Exists() {
+		fmt.Printf("This will likley include the file '%s' here.\n", config.DefaultNocancConfigFile)
+	} else {
+		fmt.Println("")
+	}
+	return nil
 }
 
 func help_cmd(fs *flag.FlagSet) error {
 	xargs := fs.Args()
 
 	if len(xargs) == 0 {
-
-		fmt.Printf("Usage:\r\n")
 		fmt.Println(Commands.Usage())
-
+		fmt.Println("Type 'nocand [cammand]' to get a list of valid flags for a particular command.")
 	} else {
 		if len(xargs) == 1 {
 			c := Commands.Find(xargs[0])
 			if c != nil {
-				fmt.Printf("Usage:\r\n")
 				fmt.Println(c.Usage())
 			} else {
 				fmt.Printf("Unknonwn command '%s'.\r\n", xargs[0])
@@ -140,6 +163,10 @@ func init_pimaster() error {
 func server_cmd(fs *flag.FlagSet) error {
 	init_config()
 
+	if len(config.Settings.AuthToken) < 16 {
+		clog.Warning("The auth-token you have selected is too short (%d characters). Please consider choosing a token of 16 characters or more.", len(config.Settings.AuthToken))
+	}
+
 	models.NodeCacheFile(config.Settings.NodeCache)
 
 	b, _ := time.Now().UTC().MarshalText()
@@ -187,6 +214,7 @@ func poweroff_cmd(fs *flag.FlagSet) error {
 }
 
 func version_cmd(fs *flag.FlagSet) error {
+	clog.Sync()
 	fmt.Printf("nocand version %s\r\n", controllers.SystemProperties.AsString("nocand_full_version"))
 	if config.Settings.CheckForUpdates {
 		fmt.Printf("\r\nChecking if a new version is available for download:\r\n")
@@ -275,6 +303,5 @@ func main() {
 			os.Exit(-1)
 		}
 	}
-
 	clog.Terminate(0)
 }

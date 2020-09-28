@@ -170,7 +170,7 @@ func (sl *ChannelFilterEvent) Unpack(b []byte) error {
 }
 
 func (sl *ChannelFilterEvent) String() string {
-	s := sl.BaseEvent.String() + "["
+	s := "["
 
 	var i int = 0
 	for k, _ := range sl.Channels {
@@ -246,7 +246,7 @@ func (sa ServerAckEvent) String() string {
 	if sa.Code < 6 {
 		return serverAckStrings[sa.Code]
 	}
-	return sa.BaseEvent.String() + "Unknown error"
+	return "Unknown Ack"
 }
 
 func (sa ServerAckEvent) ToError() error {
@@ -315,9 +315,9 @@ func (cu *ChannelUpdateRequestEvent) Unpack(value []byte) error {
 
 func (cu ChannelUpdateRequestEvent) String() string {
 	if cu.ChannelName == "" {
-		return fmt.Sprintf("%s#%d", cu.BaseEvent.String(), cu.ChannelId)
+		return fmt.Sprintf("#%d", cu.ChannelId)
 	}
-	return cu.BaseEvent.String() + cu.ChannelName
+	return cu.ChannelName
 }
 
 /****************************************************************************/
@@ -436,7 +436,7 @@ func (cu *ChannelUpdateEvent) Unpack(value []byte) error {
 }
 
 func (cu ChannelUpdateEvent) String() string {
-	s := cu.BaseEvent.String()
+	s := ""
 	switch cu.Status {
 	case CHANNEL_CREATED:
 		s += fmt.Sprintf("CREATED\t#%d\t%s", cu.ChannelId, cu.ChannelName)
@@ -509,7 +509,7 @@ func (cl *ChannelListEvent) Unpack(b []byte) error {
 		if len(b) == 0 {
 			break
 		}
-		cu := new(ChannelUpdateEvent)
+		cu := NewChannelUpdateEvent("", 0, 0, nil)
 		err := cu.Unpack(b)
 		if err != nil {
 			return err
@@ -564,14 +564,18 @@ func (nu NodeUpdateRequestEvent) String() string {
 //
 
 type NodeUpdateEvent struct {
-	BaseEvent `json:-"`
+	BaseEvent `json:"-"`
 	NodeId    nocan.NodeId     `json:"id"`
 	State     models.NodeState `json:"state"`
 	Udid      models.Udid8     `json:"udid"`
 	LastSeen  time.Time        `json:"last_seen"`
 }
 
-func NewNodeUpdateEvent(id nocan.NodeId, state models.NodeState, udid models.Udid8, last_seen time.Time) *NodeUpdateEvent {
+func NewNodeUpdateEvent() *NodeUpdateEvent {
+	return &NodeUpdateEvent{BaseEvent: CreateEvent(NodeUpdateEventId)}
+}
+
+func NewNodeUpdateEventWithParams(id nocan.NodeId, state models.NodeState, udid models.Udid8, last_seen time.Time) *NodeUpdateEvent {
 	nu := &NodeUpdateEvent{BaseEvent: BaseEvent{0, NodeUpdateEventId}, NodeId: id, State: state, LastSeen: last_seen.UTC()}
 	copy(nu.Udid[:], udid[:])
 	return nu
@@ -599,7 +603,7 @@ func (nu *NodeUpdateEvent) Unpack(b []byte) error {
 }
 
 func (nu NodeUpdateEvent) String() string {
-	return fmt.Sprintf("#%d\t%s\t%s\t%s", nu.Id, nu.Udid, nu.State, nu.LastSeen.Format(time.RFC3339Nano))
+	return fmt.Sprintf("#%d\t%s\t%s\t%s", nu.NodeId, nu.Udid, nu.State, nu.LastSeen.Format(time.RFC3339Nano))
 }
 
 // NodeListEvent
@@ -612,7 +616,7 @@ type NodeListEvent struct {
 }
 
 func NewNodeListEvent() *NodeListEvent {
-	return &NodeListEvent{BaseEvent: BaseEvent{0, NodeListEventId}, Nodes: make([]*NodeUpdateEvent, 0, 8)}
+	return &NodeListEvent{BaseEvent: CreateEvent(NodeListEventId), Nodes: make([]*NodeUpdateEvent, 0, 8)}
 }
 
 func (nl *NodeListEvent) Append(nu *NodeUpdateEvent) {
@@ -634,7 +638,7 @@ func (nl *NodeListEvent) Unpack(b []byte) error {
 		if len(b) == 0 {
 			break
 		}
-		nu := new(NodeUpdateEvent)
+		nu := NewNodeUpdateEvent()
 		if err := nu.Unpack(b); err != nil {
 			return err
 		}
@@ -852,7 +856,7 @@ func (nfp *NodeFirmwareProgressEvent) Unpack(b []byte) error {
 }
 
 func (nfp NodeFirmwareProgressEvent) String() string {
-	return nfp.BaseEvent.String() + nfp.Progress.String()
+	return nfp.Progress.String()
 }
 
 // BusPowerEvent
@@ -962,7 +966,7 @@ func (nr *NodeRebootRequestEvent) Unpack(b []byte) error {
 }
 
 func (nr NodeRebootRequestEvent) String() string {
-	return nr.BaseEvent.String() + fmt.Sprintf("%d %t", nr.NodeId(), nr.Forced())
+	return fmt.Sprintf("%d %t", nr.NodeId(), nr.Forced())
 }
 
 //
@@ -990,7 +994,7 @@ func (ie DeviceInformationEvent) Pack() ([]byte, error) {
 
 func (ie *DeviceInformationEvent) Unpack(b []byte) error {
 	if len(b) < 26 {
-		fmt.Errorf("Device info must be at least 18 bytes long, found %d", len(b))
+		return fmt.Errorf("Device info must be at least 18 bytes long, found %d", len(b))
 	}
 	di := new(device.Information)
 	copy(di.Type[:], b[0:8])
@@ -1003,7 +1007,7 @@ func (ie *DeviceInformationEvent) Unpack(b []byte) error {
 }
 
 func (ie DeviceInformationEvent) String() string {
-	return ie.BaseEvent.String() + ie.Information.String()
+	return ie.Information.String()
 }
 
 //
@@ -1107,7 +1111,7 @@ func (sp *SystemPropertiesEvent) Unpack(b []byte) error {
 }
 
 func (sp SystemPropertiesEvent) String() string {
-	return sp.BaseEvent.String() + fmt.Sprintf("[%d properties]", len(sp.Properties.Map))
+	return fmt.Sprintf("[%d properties]", len(sp.Properties.Map))
 }
 
 //
@@ -1144,7 +1148,7 @@ func (bps *BusPowerStatusUpdateEvent) Unpack(b []byte) error {
 }
 
 func (bps BusPowerStatusUpdateEvent) String() string {
-	return bps.BaseEvent.String() + fmt.Sprintf("Driver voltage=%.1f, current sense=%d, reference voltage=%.2f, status(%x)=%s.",
+	return fmt.Sprintf("Driver voltage=%.1f, current sense=%d, reference voltage=%.2f, status(%x)=%s.",
 		bps.Status.Voltage,
 		bps.Status.CurrentSense,
 		bps.Status.RefLevel,

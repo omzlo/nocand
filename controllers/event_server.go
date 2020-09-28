@@ -92,9 +92,9 @@ func clientNodeUpdateRequestHandler(c *socket.ClientDescriptor, e socket.Eventer
 	node := Nodes.Find(nur.NodeId)
 
 	if node == nil {
-		nu = socket.NewNodeUpdateEvent(nur.NodeId, models.NodeStateUnknown, models.NullUdid8, time.Unix(0, 0))
+		nu = socket.NewNodeUpdateEventWithParams(nur.NodeId, models.NodeStateUnknown, models.NullUdid8, time.Unix(0, 0))
 	} else {
-		nu = socket.NewNodeUpdateEvent(nur.NodeId, node.State, node.Udid, node.LastSeen)
+		nu = socket.NewNodeUpdateEventWithParams(nur.NodeId, node.State, node.Udid, node.LastSeen)
 	}
 	if err := c.SendAck(socket.ServerAckSuccess); err != nil {
 		return err
@@ -105,7 +105,7 @@ func clientNodeUpdateRequestHandler(c *socket.ClientDescriptor, e socket.Eventer
 func clientNodeListRequestHandler(c *socket.ClientDescriptor, e socket.Eventer) error {
 	nl := socket.NewNodeListEvent()
 	Nodes.Each(func(n *models.Node) {
-		nl.Append(socket.NewNodeUpdateEvent(n.Id, n.State, n.Udid, n.LastSeen))
+		nl.Append(socket.NewNodeUpdateEventWithParams(n.Id, n.State, n.Udid, n.LastSeen))
 	})
 	if err := c.SendAck(socket.ServerAckSuccess); err != nil {
 		return err

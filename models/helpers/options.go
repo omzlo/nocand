@@ -1,13 +1,13 @@
 package helpers
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"github.com/BurntSushi/toml"
 	"os"
 	"path"
 	"strings"
-  "errors"
-  "github.com/BurntSushi/toml"
 )
 
 var FileNotFound error = errors.New("File not found")
@@ -70,7 +70,7 @@ func similarity(a, b string) int {
 
 func (cfsl CommandFlagSetList) FuzzyMatch(command string) *CommandFlagSet {
 	best_match_index := -1
-	best_match_value := 0
+	best_match_value := 1
 
 	for i, c := range cfsl {
 		d := similarity(c.Command, command)
@@ -88,12 +88,20 @@ func (cfsl CommandFlagSetList) FuzzyMatch(command string) *CommandFlagSet {
 
 func (cfs *CommandFlagSet) Usage() string {
 	var s string
+	flag_len := 2
 	progname := path.Base(os.Args[0])
 
-	s = fmt.Sprintf("%s %s\r\n\t%s\r\n", progname, cfs.UsageText, cfs.HelpText)
-	s += "This command takes the following options:\r\n"
 	cfs.Flags(cfs.Command).VisitAll(func(f *flag.Flag) {
-		s += fmt.Sprintf("\t-%s\r\n\t\t%s\r\n", f.Name, f.Usage)
+		if len(f.Name) > flag_len {
+			flag_len = len(f.Name)
+		}
+	})
+	flen := fmt.Sprintf("%d", flag_len)
+
+	s = cfs.HelpText + "\r\n\r\nUsage:\r\n"
+	s += fmt.Sprintf("  %s %s\r\n\r\nFlags:\r\n", progname, cfs.UsageText)
+	cfs.Flags(cfs.Command).VisitAll(func(f *flag.Flag) {
+		s += fmt.Sprintf("  -%-"+flen+"s  %s\r\n", f.Name, f.Usage)
 	})
 	return s
 }
@@ -101,9 +109,18 @@ func (cfs *CommandFlagSet) Usage() string {
 func (cfsl CommandFlagSetList) Usage() string {
 	var s string
 	progname := path.Base(os.Args[0])
+	cmd_len := 2
+	for _, c := range cfsl {
+		if cmd_len < len(c.Command) {
+			cmd_len = len(c.Command)
+		}
+	}
+	clen := fmt.Sprintf("%d", cmd_len)
+
+	s = fmt.Sprintf("Usage:\r\n  %s <command> [flags]\r\n\r\nAvailable commands:\r\n", progname)
 
 	for _, c := range cfsl {
-		s += fmt.Sprintf("%s %s\r\n\t- %s\r\n", progname, c.UsageText, c.HelpText)
+		s += fmt.Sprintf("  %-"+clen+"s  %s\r\n", c.Command, c.HelpText)
 	}
 
 	return s
@@ -137,34 +154,33 @@ func (cfsl CommandFlagSetList) Parse() (*CommandFlagSet, *flag.FlagSet, error) {
 }
 
 func CheckForConfigFlag() *FilePath {
-  for k, opt := range os.Args {
-    if opt[0] == '-' {
-      opt = opt[1:]
-      if opt[0] == '-' {
-        opt = opt[1:]
-      }
-      if opt == "config" {
-        if k < len(os.Args)+1 {
-          return NewFilePath(os.Args[k+1])
-        }
-      }
-      if strings.HasPrefix(opt, "config=") {
-        return NewFilePath(strings.TrimPrefix(opt, "config="))
-      }
-    }
-  }
-  return nil
+	for k, opt := range os.Args {
+		if opt[0] == '-' {
+			opt = opt[1:]
+			if opt[0] == '-' {
+				opt = opt[1:]
+			}
+			if opt == "config" {
+				if k < len(os.Args)+1 {
+					return NewFilePath(os.Args[k+1])
+				}
+			}
+			if strings.HasPrefix(opt, "config=") {
+				return NewFilePath(strings.TrimPrefix(opt, "config="))
+			}
+		}
+	}
+	return nil
 }
 
 func LoadConfiguration(file *FilePath, settings interface{}) error {
-  if !file.Exists() {
-    return FileNotFound
-  }
+	if !file.Exists() {
+		return FileNotFound
+	}
 
-  if _, err := toml.DecodeFile(file.String(), settings); err != nil {
-    return err
-  }
+	if _, err := toml.DecodeFile(file.String(), settings); err != nil {
+		return err
+	}
 
-  return nil
+	return nil
 }
-
