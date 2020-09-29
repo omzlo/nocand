@@ -178,8 +178,17 @@ func LoadConfiguration(file *FilePath, settings interface{}) error {
 		return FileNotFound
 	}
 
-	if _, err := toml.DecodeFile(file.String(), settings); err != nil {
+	md, err := toml.DecodeFile(file.String(), settings)
+	if err != nil {
 		return err
+	}
+
+	if len(md.Undecoded()) > 0 {
+		r := "Unrecognized configuration keys: "
+		for _, v := range md.Undecoded() {
+			r += v.String()
+		}
+		return errors.New(r)
 	}
 
 	return nil
