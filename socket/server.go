@@ -169,15 +169,17 @@ func (s *Server) runClient(c *ClientDescriptor) {
 	c.LastMsgId = client_hello.MsgId()
 
 	go func() {
+		defer s.DeleteClient(c)
 		for {
 			select {
 			case event := <-c.OutputChan:
 				if err := EncodeEvent(c.Conn, event); err != nil {
 					clog.Warning("Client %s: %s", c.Name(), err)
-					c.TerminationChan <- true
+					// Wait for termination and exit the goroutine
+					<-c.TerminationChan
+					return
 				}
 			case <-c.TerminationChan:
-				s.DeleteClient(c)
 				return
 			}
 		}
@@ -187,9 +189,7 @@ func (s *Server) runClient(c *ClientDescriptor) {
 		event, err := DecodeEvent(c.Conn)
 
 		if err != nil {
-			if err == io.EOF {
-				clog.Info("Client %s closed connection", c.Name())
-			} else {
+			if err != io.EOF {
 				clog.Warning("Client %s: %s", c.Name(), err)
 			}
 			break
@@ -220,6 +220,7 @@ func (s *Server) runClient(c *ClientDescriptor) {
 		}
 	}
 	c.TerminationChan <- true
+	clog.Info("Client %s was terminated", c)
 }
 
 func (s *Server) ListenAndServe(addr string, auth_token string) error {
