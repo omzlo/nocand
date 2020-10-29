@@ -79,8 +79,8 @@ func (cc *ChannelCollection) Register(channelName string) (*Channel, error) {
 	cc.Mutex.Lock()
 	defer cc.Mutex.Unlock()
 
-	for {
-		if cc.TopId < 0 {
+	for tries := 0; tries < 65536; tries++ {
+		if cc.TopId == 65535 {
 			cc.TopId = 0
 		}
 		if channel, ok := cc.ById[cc.TopId]; !ok {
@@ -93,7 +93,7 @@ func (cc *ChannelCollection) Register(channelName string) (*Channel, error) {
 		cc.TopId++
 	}
 	// normally never reached
-	return nil, errors.New("Maximum numver of channels has been reached")
+	return nil, errors.New("The maximum number of channels has been reached")
 }
 
 func (cc *ChannelCollection) Unregister(channel *Channel) bool {

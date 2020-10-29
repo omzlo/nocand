@@ -1,11 +1,13 @@
 package socket
 
 import (
+	"context"
 	"fmt"
 	"github.com/omzlo/clog"
 	"io"
 	"net"
 	"sync"
+	"time"
 )
 
 /****************************************************************************/
@@ -18,7 +20,7 @@ type Client struct {
 	Server          *Server
 	Conn            net.Conn
 	OutputChan      chan *Event
-	TerminationChan chan bool
+	TerminationChan chan struct{}
 	Subscriptions   *SubscriptionList
 	Authenticated   bool
 	Connected       bool
@@ -107,14 +109,14 @@ func (s *Server) NewClient(conn net.Conn) *Client {
 	c.Subscriptions = NewSubscriptionList()
 	c.Server = s
 	c.Conn = conn
-	// TODO: move this next line after mutex.lock
-	c.Next = s.clients
-	c.OutputChan = make(chan *Event, 16)
-	c.TerminationChan = make(chan bool)
-	c.Connected = true
 
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
+	c.Next = s.clients
+	c.OutputChan = make(chan *Event, 16)
+	c.TerminationChan = make(chan struct{})
+	c.Connected = true
+
 	c.Id = s.topId
 	s.topId++
 	s.clients = c
@@ -124,7 +126,8 @@ func (s *Server) NewClient(conn net.Conn) *Client {
 func (s *Server) DeleteClient(c *Client) bool {
 	c.Connected = false
 	c.Conn.Close()
-	//close(c.OutputChan)
+	close(c.OutputChan)
+	close(c.TerminationChan)
 
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
@@ -133,11 +136,12 @@ func (s *Server) DeleteClient(c *Client) bool {
 	for *ptr != nil {
 		if *ptr == c {
 			*ptr = c.Next
-			clog.DebugXX("Deleting client %s, closing channel and socket", c)
+			clog.DebugXX("Deleting client %s, closing socket and channels", c)
 			return true
 		}
 		ptr = &((*ptr).Next)
 	}
+	clog.Error("Failed to deleting client %s: not found", c)
 	return false
 }
 
@@ -166,51 +170,76 @@ func dumpValue(value []byte) string {
 	return fmt.Sprintf("%q", value)
 }
 
+func (s *Server) runHandler(c *Client, eid EventId, value []byte) <-chan bool {
+	respChan := make(chan bool, 1)
+	go func() {
+		handler := s.handlers[eid]
+		if handler != nil {
+			if !c.Authenticated && eid != ClientAuthEvent && eid != ClientHelloEvent {
+				c.Put(ServerAckEvent, SERVER_ACK_UNAUTHORIZED)
+				respChan <- false
+				return
+			}
+			if err := handler(c, eid, value); err != nil {
+				clog.Warning("Handler for event %s(%d) failed: %s", eid, eid, err)
+				respChan <- false
+			} else {
+				respChan <- true
+			}
+			return
+		}
+		clog.Warning("No handler found for event id %d", eid)
+		respChan <- false
+	}()
+	return respChan
+}
+
 func (s *Server) runClient(c *Client) {
 	go func() {
 		for {
 			select {
 			case event := <-c.OutputChan:
 				if err := EncodeToStream(c.Conn, event.Id, event.Value); err != nil {
-					clog.Warning("Client %s: %s", c, err)
-					c.TerminationChan <- true
+					clog.Warning("Client %s write error: %s", c, err)
+					c.Conn.Close()
+					<-c.TerminationChan
+					return
 				}
 			case <-c.TerminationChan:
-				s.DeleteClient(c)
 				return
 			}
 		}
 	}()
 
+EventLoop:
 	for {
 		eid, value, err := c.Get()
 		if err != nil {
 			if err == io.EOF {
 				clog.Info("Client %s closed connection", c)
 			} else {
-				clog.Warning("Client %s: %s", c, err)
+				clog.Warning("Client %s read error: %s", c, err)
 			}
 			break
 		}
 
 		clog.DebugX("Processing event %s(%d) from client %s, with %d bytes of payload", eid, eid, c, len(value))
 
-		handler := s.handlers[eid]
-		if handler != nil {
-			if !c.Authenticated && eid != ClientAuthEvent && eid != ClientHelloEvent {
-				c.Put(ServerAckEvent, SERVER_ACK_UNAUTHORIZED)
-				break
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		select {
+		case <-ctx.Done():
+			cancel()
+			clog.Error("Processing event %s(%d) from client %s took more than 3 seconds. Event payload: %q", eid, eid, c, value)
+			break EventLoop
+		case success := <-s.runHandler(c, eid, value):
+			cancel()
+			if !success {
+				break EventLoop
 			}
-			if err = handler(c, eid, value); err != nil {
-				clog.Error("Handler for event %s(%d) failed: %s, value=%s", eid, eid, err, dumpValue(value))
-				break
-			}
-		} else {
-			clog.Warning("No handler found for event id %d", eid)
-			break
 		}
 	}
-	c.TerminationChan <- true
+	c.TerminationChan <- struct{}{}
+	s.DeleteClient(c)
 }
 
 func (s *Server) ListenAndServe(addr string, auth_token string) error {
