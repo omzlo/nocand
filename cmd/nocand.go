@@ -50,6 +50,7 @@ func ServerFlagSet(cmd string) *flag.FlagSet {
 	fs := BaseFlagSet(cmd)
 	fs.UintVar(&config.Settings.PingInterval, "ping-interval", config.Settings.PingInterval, "Node ping interval in milliseconds (experimental, defaults to 0 = disabled).")
 	fs.Var(config.Settings.NodeCache, "node-cache", fmt.Sprintf("Node cache file name, defaults to '%s'. Set it to an empty string to disable node caching.", config.DefaultNodeCacheFile))
+	fs.IntVar(&config.Settings.AuthTokenMinimumSize, "auth-token-minium-size", config.Settings.AuthTokenMinimumSize, "Authentication token minimum size in characters (defaults to 24).")
 	return fs
 }
 
@@ -163,8 +164,8 @@ func init_pimaster() error {
 func server_cmd(fs *flag.FlagSet) error {
 	init_config()
 
-	if len(config.Settings.AuthToken) < 16 {
-		clog.Warning("The auth-token you have selected is too short (%d characters). Please consider choosing a token of 16 characters or more.", len(config.Settings.AuthToken))
+	if len(config.Settings.AuthToken) < config.Settings.AuthTokenMinimumSize {
+		return fmt.Errorf("The auth-token you have selected is too short (%d characters). Choose a token of 24 characters or more or dissable this check with the -auth-token-limit option.", len(config.Settings.AuthToken))
 	}
 
 	models.NodeCacheFile(config.Settings.NodeCache)
@@ -299,6 +300,7 @@ func main() {
 		err = command.Processor(fs)
 
 		if err != nil {
+			clog.Error("%s", err)
 			fmt.Fprintf(os.Stderr, "# %s failed: %s\r\n", command.Command, err)
 			os.Exit(-1)
 		}

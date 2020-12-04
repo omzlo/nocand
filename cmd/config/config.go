@@ -10,6 +10,7 @@ type Configuration struct {
 	LoadError               error             `toml:"-"`
 	Bind                    string            `toml:"bind"`
 	AuthToken               string            `toml:"auth-token"`
+	AuthTokenMinimumSize    int               `toml:"auth-token-minimum-size"`
 	DriverReset             bool              `toml:"driver-reset"`
 	PowerMonitoringInterval uint              `toml:"power-monitoring-interval"`
 	PingInterval            uint              `toml:"ping-interval"`
@@ -28,6 +29,7 @@ var Settings = Configuration{
 	LoadError:               nil,
 	Bind:                    ":4242",
 	AuthToken:               "password",
+	AuthTokenMinimumSize:    24,
 	DriverReset:             true,
 	PowerMonitoringInterval: 10,
 	PingInterval:            0,

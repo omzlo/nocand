@@ -54,7 +54,7 @@ func NewEventConn(addr string, client_name string, auth string) *EventConn {
 		ClientName:      client_name,
 		AuthToken:       auth,
 		Connected:       false,
-		AutoRedial:      true,
+		AutoRedial:      false,
 		MsgId:           1,
 		Callbacks:       make(map[EventId]EventCallback),
 		processError:    defaultProcessError,
@@ -173,6 +173,11 @@ func (conn *EventConn) Connect() error {
 	return conn.dial()
 }
 
+func (conn *EventConn) EnableAutoRedial() *EventConn {
+	conn.AutoRedial = true
+	return conn
+}
+
 func (conn *EventConn) processNextEvent() error {
 	// TODO: check if we need atomic change to inProcessNextEvent
 
@@ -213,26 +218,30 @@ func (conn *EventConn) _processNextEvent() error {
 func (conn *EventConn) DispatchEvents() error {
 	backoff := 2
 
-	/* First connect, if Connect() was not called previously */
+	/* First connect, if Connect() was not called previously
 	if !conn.Connected {
 		err := conn.dial()
 		if err != nil {
 			return err
 		}
 	}
+	*/
 
 	for {
-		/* Reconnect automatically if needed. Auto-redial will define the behaviour */
+		/* Reconnect automatically if needed. Auto-redial defines the behaviour */
 		if !conn.Connected {
 			err := conn.dial()
 			if err != nil {
+				if !conn.AutoRedial {
+					return err
+				}
 				time.Sleep(time.Duration(backoff) * time.Second)
 				if backoff < 1024 {
 					backoff *= 2
 				}
 				continue
 			}
-			backoff = 3
+			backoff = 2
 		}
 
 		/* Process events */
