@@ -124,13 +124,14 @@ func (s *Server) NewClient(conn net.Conn) *Client {
 }
 
 func (s *Server) DeleteClient(c *Client) bool {
-	c.Connected = false
-	c.Conn.Close()
-	close(c.OutputChan)
-	close(c.TerminationChan)
-
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
+
+	c.Connected = false
+	c.Conn.Close()
+
+	close(c.OutputChan)
+	close(c.TerminationChan)
 
 	ptr := &s.clients
 	for *ptr != nil {
@@ -196,6 +197,7 @@ func (s *Server) runHandler(c *Client, eid EventId, value []byte) <-chan bool {
 
 func (s *Server) runClient(c *Client) {
 	go func() {
+		defer s.DeleteClient(c)
 		for {
 			select {
 			case event := <-c.OutputChan:
@@ -238,8 +240,7 @@ EventLoop:
 			}
 		}
 	}
-	c.TerminationChan <- struct{}{}
-	s.DeleteClient(c)
+	c.TerminationChan <- struct{}{} // This will result in a call to s.DeleteClient(c)
 }
 
 func (s *Server) ListenAndServe(addr string, auth_token string) error {
