@@ -50,6 +50,10 @@ func EncodeUint64(dest []byte, u uint64) {
 	dest[7] = byte(u)
 }
 
+func EncodeTime(dest []byte, t time.Time) {
+	EncodeUint64(dest, uint64(t.UnixNano()))
+}
+
 func DecodeUint64(src []byte) uint64 {
 	return (uint64(src[0]) << 56) |
 		(uint64(src[1]) << 48) |
@@ -59,6 +63,11 @@ func DecodeUint64(src []byte) uint64 {
 		(uint64(src[5]) << 16) |
 		(uint64(src[6]) << 8) |
 		uint64(src[7])
+}
+
+func DecodeTime(src []byte) time.Time {
+	utime := DecodeUint64(src)
+	return time.Unix(int64(utime/1e9), int64(utime%1e9))
 }
 
 /****************************************************************************/
@@ -355,23 +364,26 @@ type ChannelUpdateEvent struct {
 	ChannelName string
 	Status      ChannelStatus
 	Value       []byte
+	UpdatedAt   time.Time
 }
 
 func (cu *ChannelUpdateEvent) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
-		Id     nocan.ChannelId `json:"id"`
-		Name   string          `json:"name"`
-		Status string          `json:"status"`
-		Value  string          `json:"value"`
+		Id        nocan.ChannelId `json:"id"`
+		Name      string          `json:"name"`
+		Status    string          `json:"status"`
+		Value     string          `json:"value"`
+		UpdatedAt time.Time       `json:"updated_at"`
 	}{
-		Id:     cu.ChannelId,
-		Name:   cu.ChannelName,
-		Status: cu.Status.String(),
-		Value:  string(cu.Value),
+		Id:        cu.ChannelId,
+		Name:      cu.ChannelName,
+		Status:    cu.Status.String(),
+		Value:     string(cu.Value),
+		UpdatedAt: cu.UpdatedAt,
 	})
 }
 
-func NewChannelUpdateEvent(chan_name string, chan_id nocan.ChannelId, status ChannelStatus, value []byte) *ChannelUpdateEvent {
+func NewChannelUpdateEvent(chan_name string, chan_id nocan.ChannelId, status ChannelStatus, value []byte, updated_at time.Time) *ChannelUpdateEvent {
 	var v []byte
 
 	if value != nil {
@@ -380,23 +392,31 @@ func NewChannelUpdateEvent(chan_name string, chan_id nocan.ChannelId, status Cha
 	} else {
 		v = nil
 	}
-	return &ChannelUpdateEvent{BaseEvent: BaseEvent{0, ChannelUpdateEventId}, ChannelId: chan_id, ChannelName: chan_name, Status: status, Value: v}
+	return &ChannelUpdateEvent{BaseEvent: BaseEvent{0, ChannelUpdateEventId}, ChannelId: chan_id, ChannelName: chan_name, Status: status, UpdatedAt: updated_at, Value: v}
+}
+
+func NewChannelUpdateEventEmpty() *ChannelUpdateEvent {
+	return &ChannelUpdateEvent{BaseEvent: BaseEvent{0, ChannelUpdateEventId}}
 }
 
 func (cu *ChannelUpdateEvent) PackedLength() int {
-	return len(cu.ChannelName) + len(cu.Value) + 5
+	return len(cu.ChannelName) + len(cu.Value) + 13
 }
 
 func (cu *ChannelUpdateEvent) Pack() ([]byte, error) {
-	buf := make([]byte, 0, cu.PackedLength())
-	buf = append(buf, byte(cu.Status))
-	buf = append(buf, byte(cu.ChannelId>>8), byte(cu.ChannelId&0xFF))
-	buf = append(buf, byte(len(cu.ChannelName)))
-	buf = append(buf, []byte(cu.ChannelName)...)
-	buf = append(buf, byte(len(cu.Value)))
+	l_name := len(cu.ChannelName)
+	l_val := len(cu.Value)
+
+	buf := make([]byte, cu.PackedLength())
+	buf[0] = byte(cu.Status)
+	EncodeUint16(buf[1:3], uint16(cu.ChannelId))
+	buf[3] = byte(l_name)
+	copy(buf[4:], []byte(cu.ChannelName))
+	buf[4+l_name] = byte(l_val)
 	if cu.Value != nil {
-		buf = append(buf, cu.Value...)
+		copy(buf[5+l_name:], cu.Value)
 	}
+	EncodeTime(buf[5+l_name+l_val:], cu.UpdatedAt)
 	return buf, nil
 }
 
@@ -409,11 +429,6 @@ func (cu *ChannelUpdateEvent) Unpack(value []byte) error {
 	cu.ChannelId = (nocan.ChannelId(value[1]) << 8) | nocan.ChannelId(value[2])
 
 	lName := int(value[3])
-	/*
-		if lName == 0 {
-			return errors.New("Empty channel name")
-		}
-	*/
 	if lName > 64 {
 		return errors.New("Channel name exceeds 64 bytes")
 	}
@@ -432,29 +447,27 @@ func (cu *ChannelUpdateEvent) Unpack(value []byte) error {
 	}
 	cu.Value = make([]byte, lValue)
 	copy(cu.Value, value)
+	value = value[lValue:]
+	if len(value) < 8 {
+		return ErrorMissingData
+	}
+	cu.UpdatedAt = DecodeTime(value)
+
 	return nil
 }
 
 func (cu ChannelUpdateEvent) String() string {
-	s := ""
 	switch cu.Status {
 	case CHANNEL_CREATED:
-		s += fmt.Sprintf("CREATED\t#%d\t%s", cu.ChannelId, cu.ChannelName)
-		break
+		return fmt.Sprintf("CREATED\t#%d\t%s\t%s", cu.ChannelId, cu.ChannelName, cu.UpdatedAt.Format(time.RFC3339Nano))
 	case CHANNEL_DESTROYED:
-		s += fmt.Sprintf("DESTROYED\t#%d\t%s", cu.ChannelId, cu.ChannelName)
-		break
+		return fmt.Sprintf("DESTROYED\t#%d\t%s\t%s", cu.ChannelId, cu.ChannelName, cu.UpdatedAt.Format(time.RFC3339Nano))
 	case CHANNEL_UPDATED:
-		s += fmt.Sprintf("UPDATED\t#%d\t%s\t%q", cu.ChannelId, cu.ChannelName, cu.Value)
-		break
+		return fmt.Sprintf("UPDATED\t#%d\t%s\t%q\t%s", cu.ChannelId, cu.ChannelName, cu.Value, cu.UpdatedAt.Format(time.RFC3339Nano))
 	case CHANNEL_NOT_FOUND:
-		s += fmt.Sprintf("NOT_FOUND\t#%d\t%s", cu.ChannelId, cu.ChannelName)
-		break
-	default:
-		s += "ERROR"
-		break
+		return fmt.Sprintf("NOT_FOUND\t#%d\t%s", cu.ChannelId, cu.ChannelName)
 	}
-	return s
+	return "ERROR"
 }
 
 // ChannelListRequestEvent
@@ -509,7 +522,7 @@ func (cl *ChannelListEvent) Unpack(b []byte) error {
 		if len(b) == 0 {
 			break
 		}
-		cu := NewChannelUpdateEvent("", 0, 0, nil)
+		cu := new(ChannelUpdateEvent)
 		err := cu.Unpack(b)
 		if err != nil {
 			return err
@@ -621,6 +634,20 @@ func NewNodeListEvent() *NodeListEvent {
 
 func (nl *NodeListEvent) Append(nu *NodeUpdateEvent) {
 	nl.Nodes = append(nl.Nodes, nu)
+}
+
+func (nl *NodeListEvent) Exclude(id nocan.NodeId) bool {
+	retval := false
+	new_list := make([]*NodeUpdateEvent, 0, len(nl.Nodes))
+	for _, nu := range nl.Nodes {
+		if nu.NodeId != id {
+			new_list = append(new_list, nu)
+		} else {
+			retval = true
+		}
+	}
+	nl.Nodes = new_list
+	return retval
 }
 
 func (nl *NodeListEvent) Pack() ([]byte, error) {

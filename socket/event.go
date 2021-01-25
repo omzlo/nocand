@@ -172,7 +172,7 @@ func DecodeEvent(r io.Reader) (Eventer, error) {
 	case ChannelUpdateRequestEventId:
 		x = NewChannelUpdateRequestEvent("", 0)
 	case ChannelUpdateEventId:
-		x = NewChannelUpdateEvent("", 0, 0, nil)
+		x = NewChannelUpdateEventEmpty()
 	case ChannelListRequestEventId:
 		x = NewChannelListRequestEvent()
 	case ChannelListEventId:

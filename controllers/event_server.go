@@ -29,7 +29,7 @@ func clientChannelUpdateRequestHandler(c *socket.ClientDescriptor, e socket.Even
 		return err
 	}
 
-	return c.SendEvent(socket.NewChannelUpdateEvent(channel.Name, channel.Id, socket.CHANNEL_UPDATED, channel.Value))
+	return c.SendEvent(socket.NewChannelUpdateEvent(channel.Name, channel.Id, socket.CHANNEL_UPDATED, channel.Value, channel.UpdatedAt))
 }
 
 func clientChannelUpdateHandler(c *socket.ClientDescriptor, e socket.Eventer) error {
@@ -38,11 +38,17 @@ func clientChannelUpdateHandler(c *socket.ClientDescriptor, e socket.Eventer) er
 	cu := e.(*socket.ChannelUpdateEvent)
 
 	if cu.Status == socket.CHANNEL_CREATED {
-		_, err := Channels.Register(cu.ChannelName)
-		if err != nil {
-			clog.Warning("Channel creation error for (%d, %s): %s", cu.ChannelId, cu.ChannelName, err)
-			return c.SendAck(socket.ServerAckGeneralFailure)
+		channel = Channels.Lookup(cu.ChannelName)
+		if channel == nil {
+			channel, err := Channels.Register(cu.ChannelName)
+			if err != nil {
+				clog.Warning("Channel creation error for (%d, %s): %s", cu.ChannelId, cu.ChannelName, err)
+				return c.SendAck(socket.ServerAckGeneralFailure)
+			}
+			clog.DebugXX("Broadcasting channel creation for %s", cu.ChannelName)
+			EventServer.Broadcast(socket.NewChannelUpdateEvent(channel.Name, channel.Id, socket.CHANNEL_CREATED, nil, cu.UpdatedAt), c)
 		}
+		return c.SendAck(socket.ServerAckSuccess)
 	} else {
 
 		if cu.ChannelName == "" {
@@ -60,7 +66,7 @@ func clientChannelUpdateHandler(c *socket.ClientDescriptor, e socket.Eventer) er
 			channel.SetContent(cu.Value)
 			Bus.Publish(0, channel.Id, cu.Value)
 			clog.DebugXX("Broadcasting channel update on %s: %q", cu.ChannelName, cu.Value)
-			EventServer.Broadcast(socket.NewChannelUpdateEvent(channel.Name, channel.Id, socket.CHANNEL_UPDATED, cu.Value), c)
+			EventServer.Broadcast(socket.NewChannelUpdateEvent(channel.Name, channel.Id, socket.CHANNEL_UPDATED, cu.Value, cu.UpdatedAt), c)
 			return c.SendAck(socket.ServerAckSuccess)
 		}
 		if cu.Status == socket.CHANNEL_DESTROYED {
@@ -76,7 +82,7 @@ func clientChannelUpdateHandler(c *socket.ClientDescriptor, e socket.Eventer) er
 func clientChannelListRequestHandler(c *socket.ClientDescriptor, e socket.Eventer) error {
 	cl := socket.NewChannelListEvent()
 	Channels.Each(func(c *models.Channel) {
-		cl.Append(socket.NewChannelUpdateEvent(c.Name, c.Id, socket.CHANNEL_UPDATED, c.Value))
+		cl.Append(socket.NewChannelUpdateEvent(c.Name, c.Id, socket.CHANNEL_UPDATED, c.Value, c.UpdatedAt))
 	})
 	if err := c.SendAck(socket.ServerAckSuccess); err != nil {
 		return err

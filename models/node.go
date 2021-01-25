@@ -250,9 +250,10 @@ func (nc *NodeCollection) Unregister(node *Node) bool {
 	nc.Mutex.Lock()
 	defer nc.Mutex.Unlock()
 
+	retval := (nc.Nodes[node.Id] == node)
 	delete(nc.Udids, node.Udid)
 	nc.Nodes[node.Id] = nil
-	return true
+	return retval
 }
 
 func (nc *NodeCollection) Clear() {

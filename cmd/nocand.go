@@ -48,7 +48,7 @@ func BaseFlagSet(cmd string) *flag.FlagSet {
 
 func ServerFlagSet(cmd string) *flag.FlagSet {
 	fs := BaseFlagSet(cmd)
-	fs.UintVar(&config.Settings.PingInterval, "ping-interval", config.Settings.PingInterval, "Node ping interval in milliseconds (experimental, defaults to 0 = disabled).")
+	fs.UintVar(&config.Settings.PingInterval, "ping-interval", config.Settings.PingInterval, "Node ping interval in milliseconds (defaults to 5000ms, use 0 to disable).")
 	fs.Var(config.Settings.NodeCache, "node-cache", fmt.Sprintf("Node cache file name, defaults to '%s'. Set it to an empty string to disable node caching.", config.DefaultNodeCacheFile))
 	fs.IntVar(&config.Settings.AuthTokenMinimumSize, "auth-token-minium-size", config.Settings.AuthTokenMinimumSize, "Authentication token minimum size in characters (defaults to 24).")
 	return fs

@@ -32,7 +32,7 @@ var Settings = Configuration{
 	AuthTokenMinimumSize:    24,
 	DriverReset:             true,
 	PowerMonitoringInterval: 10,
-	PingInterval:            0,
+	PingInterval:            5000,
 	SpiSpeed:                500000,
 	LogLevel:                0,
 	CurrentLimit:            0,

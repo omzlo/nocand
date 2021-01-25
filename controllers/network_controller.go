@@ -15,6 +15,7 @@ import (
 var Bus *NocanNetworkController = NewNocanNetworkController()
 var Nodes *models.NodeCollection = models.NewNodeCollection()
 var Channels *models.ChannelCollection = models.NewChannelCollection()
+var PingerEnabled = false
 
 //
 //
@@ -119,10 +120,12 @@ func (nc *NocanNetworkController) pinger(interval time.Duration) {
 			}
 		})
 		for _, node := range dequeue {
-			clog.Info("Unregistering node %d due to unresponsiveness.", node.Id)
+			clog.Info("Unregistering node %s due to unresponsiveness.", node)
 			node.State = models.NodeStateUnresponsive
 			EventServer.Broadcast(socket.NewNodeUpdateEventWithParams(node.Id, node.State, node.Udid, node.LastSeen), nil)
-			Nodes.Unregister(node)
+			if !Nodes.Unregister(node) {
+				clog.Error("Failed to unregister node %d.", node.Id)
+			}
 		}
 		time.Sleep(interval)
 	}
@@ -130,9 +133,11 @@ func (nc *NocanNetworkController) pinger(interval time.Duration) {
 
 func (nc *NocanNetworkController) RunPinger(interval time.Duration) {
 	if interval > 0 {
+		PingerEnabled = true
 		clog.Debug("Node ping interval is set to %s", interval)
 		go nc.pinger(interval)
 	} else {
+		PingerEnabled = true
 		clog.Debug("Node pinging is disabled")
 	}
 }
@@ -205,6 +210,9 @@ MasterLoop:
 				continue MasterLoop
 			} else {
 				clog.Info("Device %s has been registered as node N%d, with firmware v%d", udid, node.Id, param)
+				if PingerEnabled && param < 3 {
+					clog.Warning("Device %s has a firmware version less than 3, pinging will be disabled for this node.", udid)
+				}
 			}
 			node.SetAttribute("ID", strconv.Itoa(int(node.Id)))
 			node.SetAttribute("UDID", udid.String())
@@ -309,7 +317,7 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 			} else {
 				clog.Info("Registered channel %s for node %d as %d", channel_name, msg.NodeId(), channel.Id)
 				nc.SendSystemMessage(msg.NodeId(), nocan.SYS_CHANNEL_REGISTER_ACK, 0x00, channel.Id.ToBytes())
-				EventServer.Broadcast(socket.NewChannelUpdateEvent(channel.Name, channel.Id, socket.CHANNEL_CREATED, nil), nil)
+				EventServer.Broadcast(socket.NewChannelUpdateEvent(channel.Name, channel.Id, socket.CHANNEL_CREATED, nil, time.Now()), nil)
 			}
 
 		case nocan.SYS_CHANNEL_LOOKUP:
@@ -337,7 +345,7 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 		if channel != nil {
 			clog.Info("Updated content of channel '%s' (id=%d) to %q", channel.Name, msg.ChannelId(), msg.Bytes())
 			channel.SetContent(msg.Bytes())
-			EventServer.Broadcast(socket.NewChannelUpdateEvent(channel.Name, channel.Id, socket.CHANNEL_UPDATED, msg.Bytes()), nil)
+			EventServer.Broadcast(socket.NewChannelUpdateEvent(channel.Name, channel.Id, socket.CHANNEL_UPDATED, msg.Bytes(), channel.UpdatedAt), nil)
 		} else {
 			clog.Warning("Could not unpdate non-existing channel %d for node %d", msg.ChannelId(), msg.NodeId())
 		}

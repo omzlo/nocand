@@ -18,11 +18,10 @@ type ClientDescriptor struct {
 	Server          *Server
 	Conn            *sscp.Conn
 	OutputChan      chan Eventer
-	TerminationChan chan bool
+	TerminationChan chan struct{}
 	ChannelFilter   *ChannelFilterEvent
 	Connected       bool
 	Next            *ClientDescriptor
-	Access          sync.Mutex
 	LastMsgId       uint16
 }
 
@@ -80,14 +79,14 @@ func (s *Server) NewClient(conn *sscp.Conn) *ClientDescriptor {
 	c.ChannelFilter = nil
 	c.Server = s
 	c.Conn = conn
-	// TODO: move this next line after mutex.lock
-	c.Next = s.clients
-	c.OutputChan = make(chan Eventer, 16)
-	c.TerminationChan = make(chan bool)
-	c.Connected = true
 
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
+	c.Next = s.clients
+	c.OutputChan = make(chan Eventer, 16)
+	c.TerminationChan = make(chan struct{})
+	c.Connected = true
+
 	c.Id = s.topId
 	s.topId++
 	s.clients = c
@@ -95,12 +94,14 @@ func (s *Server) NewClient(conn *sscp.Conn) *ClientDescriptor {
 }
 
 func (s *Server) DeleteClient(c *ClientDescriptor) bool {
-	c.Connected = false
-	c.Conn.Close()
-	//close(c.OutputChan)
-
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
+
+	c.Connected = false
+	c.Conn.Close()
+
+	close(c.OutputChan)
+	close(c.TerminationChan)
 
 	ptr := &s.clients
 	for *ptr != nil {
@@ -111,6 +112,7 @@ func (s *Server) DeleteClient(c *ClientDescriptor) bool {
 		}
 		ptr = &((*ptr).Next)
 	}
+	clog.Error("Internal error: failed to delete client %s", c.Name())
 	return false
 }
 
@@ -148,26 +150,32 @@ func dumpValue(value []byte) string {
 }
 
 func (s *Server) runClient(c *ClientDescriptor) {
+	/* Step 1: Decode client-hello-event */
 	e, err := DecodeEvent(c.Conn)
 	if err != nil {
 		clog.Warning("Could not decode client-hello-event: %s", err)
+		c.SendAck(ServerAckBadRequest)
 		return
 	}
 
 	client_hello, ok := e.(*ClientHelloEvent)
 	if !ok {
 		clog.Warning("Expected client-hello-event got %s instead.", e.Id())
+		c.SendAck(ServerAckBadRequest)
 		return
 	}
 
+	/* Step 2: Send server-hello-event */
 	server_hello := NewServerHelloEvent("nocand", 0, 0)
 	server_hello.SetMsgId(client_hello.MsgId())
 	if err := EncodeEvent(c.Conn, server_hello); err != nil {
 		clog.Warning("Could not encode server-hello-event: %s", err)
+		c.SendAck(ServerAckBadRequest)
 		return
 	}
 	c.LastMsgId = client_hello.MsgId()
 
+	/* Step 3: Run client sending process. */
 	go func() {
 		defer s.DeleteClient(c)
 		for {
@@ -175,6 +183,7 @@ func (s *Server) runClient(c *ClientDescriptor) {
 			case event := <-c.OutputChan:
 				if err := EncodeEvent(c.Conn, event); err != nil {
 					clog.Warning("Client %s: %s", c.Name(), err)
+					c.Conn.Close()
 					// Wait for termination and exit the goroutine
 					<-c.TerminationChan
 					return
@@ -185,12 +194,15 @@ func (s *Server) runClient(c *ClientDescriptor) {
 		}
 	}()
 
+	/* Step 4: Run client receiving process. */
 	for {
 		event, err := DecodeEvent(c.Conn)
 
 		if err != nil {
 			if err != io.EOF {
-				clog.Warning("Client %s: %s", c.Name(), err)
+				clog.Warning("Message reception error for client %s: %s", c.Name(), err)
+				c.LastMsgId++ // blindly assume this
+				c.SendAck(ServerAckBadRequest)
 			}
 			break
 		}
@@ -204,6 +216,7 @@ func (s *Server) runClient(c *ClientDescriptor) {
 			}
 			if c.LastMsgId != event.MsgId() {
 				clog.Warning("Client MsgId mismatch: expected %d but got %d", c.LastMsgId, event.MsgId())
+				c.SendAck(ServerAckBadRequest)
 				break
 			}
 		}
@@ -212,15 +225,22 @@ func (s *Server) runClient(c *ClientDescriptor) {
 		if handler != nil {
 			if err = handler(c, event); err != nil {
 				clog.Error("Handler for event %s(%d) failed: %s", event.Id(), event.Id(), err)
+				// SendAck is performed by handler() here
 				break
 			}
 		} else {
 			clog.Warning("No handler found for event id %d", event.Id())
+			c.LastMsgId++ // blindly assume this
+			c.SendAck(ServerAckBadRequest)
 			break
 		}
 	}
-	c.TerminationChan <- true
-	clog.Info("Client %s was terminated", c)
+	c.TerminationChan <- struct{}{}
+	/* This will result in a call to s.DeleteClient(c) and the termination of the
+	   goroutine launched at step 3.
+	   s.DeleteClient closes the socket and channels associated to the client.
+	   It also prints a debug message confirming the deletion of the client.
+	*/
 }
 
 func (s *Server) ListenAndServe(addr string, auth_token string) error {

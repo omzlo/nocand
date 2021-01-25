@@ -218,15 +218,6 @@ func (conn *EventConn) _processNextEvent() error {
 func (conn *EventConn) DispatchEvents() error {
 	backoff := 2
 
-	/* First connect, if Connect() was not called previously
-	if !conn.Connected {
-		err := conn.dial()
-		if err != nil {
-			return err
-		}
-	}
-	*/
-
 	for {
 		/* Reconnect automatically if needed. Auto-redial defines the behaviour */
 		if !conn.Connected {
