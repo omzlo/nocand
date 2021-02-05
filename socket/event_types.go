@@ -913,7 +913,7 @@ func (bp *BusPowerEvent) Unpack(b []byte) error {
 	if len(b) != 1 {
 		return ErrorMissingData
 	}
-	bp.PowerOn = (b[0] == 0)
+	bp.PowerOn = (b[0] == 1)
 	return nil
 }
 

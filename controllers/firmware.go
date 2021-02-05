@@ -53,7 +53,7 @@ func bytesToUint32(d []byte) uint32 {
 
 func checkDeviceSignature(node *models.Node, op *NodeFirmwareOperation) error {
 	Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_GET_SIGNATURE, 0, nil)
-	response, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_GET_SIGNATURE_ACK)
+	response, err := Bus.ExpectSystemMessage(node, nocan.SYS_BOOTLOADER_GET_SIGNATURE_ACK)
 	if err != nil {
 		op.Client.SendEvent(op.Progress.MarkAsFailed())
 		return err
@@ -84,12 +84,13 @@ func uploadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 
 	uint32ToBytes(FLASH_APP_ORIGIN, data[:])
 	Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_SET_ADDRESS, 'F', data[:4])
-	if _, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_SET_ADDRESS_ACK); err != nil {
+	if _, err := Bus.ExpectSystemMessage(node, nocan.SYS_BOOTLOADER_SET_ADDRESS_ACK); err != nil {
 		op.Client.SendEvent(op.Progress.MarkAsFailed())
 		return fmt.Errorf("SYS_BOOTLOADER_SET_ADDRESS failed for node %s, prior to erase operation, %s", node, err)
 	}
+
 	Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_ERASE, 0, nil)
-	if _, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_ERASE_ACK); err != nil {
+	if _, err := Bus.ExpectSystemMessage(node, nocan.SYS_BOOTLOADER_ERASE_ACK); err != nil {
 		op.Client.SendEvent(op.Progress.MarkAsFailed())
 		return fmt.Errorf("SYS_BOOTLOADER_ERASE failed for node %s, %s", node, err)
 	}
@@ -101,7 +102,7 @@ func uploadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 			base_address := block.Offset + page_offset
 			uint32ToBytes(base_address, data[:])
 			Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_SET_ADDRESS, 'F', data[:4])
-			if _, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_SET_ADDRESS_ACK); err != nil {
+			if _, err := Bus.ExpectSystemMessage(node, nocan.SYS_BOOTLOADER_SET_ADDRESS_ACK); err != nil {
 				op.Client.SendEvent(op.Progress.MarkAsFailed())
 				return fmt.Errorf("SYS_BOOTLOADER_SET_ADDRESS failed for node %s at address=0x%x, %s", node, address, err)
 			}
@@ -113,7 +114,7 @@ func uploadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 				rlen := copy(data[:], block.Data[page_offset+page_pos:])
 				crc = crc32.Update(crc, crc32.IEEETable, data[:rlen])
 				Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_WRITE, 0, data[:rlen])
-				if _, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_WRITE_ACK); err != nil {
+				if _, err := Bus.ExpectSystemMessage(node, nocan.SYS_BOOTLOADER_WRITE_ACK); err != nil {
 					op.Client.SendEvent(op.Progress.MarkAsFailed())
 					return fmt.Errorf("SYS_BOOTLOADER_WRITE failed for node %d at address=0x%x, %s", node.Id, address, err)
 				}
@@ -122,7 +123,7 @@ func uploadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 			uint32ToBytes(crc, data[:])
 			Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_WRITE, 1, data[:4])
 
-			response, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_WRITE_ACK)
+			response, err := Bus.ExpectSystemMessage(node, nocan.SYS_BOOTLOADER_WRITE_ACK)
 			if err != nil {
 				op.Client.SendEvent(op.Progress.MarkAsFailed())
 				return fmt.Errorf("Final SYS_BOOTLOADER_WRITE failed for node %d at address=0x%x, %s", node.Id, address, err)
@@ -168,14 +169,14 @@ func downloadFirmware(node *models.Node, op *NodeFirmwareOperation) error {
 		address = FLASH_APP_ORIGIN + i*FLASH_PAGE_SIZE
 		uint32ToBytes(address, data[:])
 		Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_SET_ADDRESS, 'F', data[:4])
-		if _, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_SET_ADDRESS_ACK); err != nil {
+		if _, err := Bus.ExpectSystemMessage(node, nocan.SYS_BOOTLOADER_SET_ADDRESS_ACK); err != nil {
 			op.Client.SendEvent(op.Progress.MarkAsFailed())
 			return fmt.Errorf("NOCAN_SYS_BOOTLOADER_SET_ADDRESS failed for node %d at address=0x%x, %s", node.Id, address, err)
 		}
 
 		for pos := uint32(0); pos < FLASH_PAGE_SIZE; pos += 64 {
 			Bus.SendSystemMessage(node.Id, nocan.SYS_BOOTLOADER_READ, 64, nil)
-			response, err := Bus.ExpectSystemMessage(node.Id, nocan.SYS_BOOTLOADER_READ_ACK)
+			response, err := Bus.ExpectSystemMessage(node, nocan.SYS_BOOTLOADER_READ_ACK)
 			if err != nil {
 				op.Client.SendEvent(op.Progress.MarkAsFailed())
 				return fmt.Errorf("NOCAN_SYS_BOOTLOADER_READ failed for node %d at address=0x%x, %s", node.Id, address, err)

@@ -81,7 +81,7 @@ func clientChannelUpdateHandler(c *socket.ClientDescriptor, e socket.Eventer) er
 
 func clientChannelListRequestHandler(c *socket.ClientDescriptor, e socket.Eventer) error {
 	cl := socket.NewChannelListEvent()
-	Channels.Each(func(c *models.Channel) {
+	Channels.EachOrdered(func(c *models.Channel) {
 		cl.Append(socket.NewChannelUpdateEvent(c.Name, c.Id, socket.CHANNEL_UPDATED, c.Value, c.UpdatedAt))
 	})
 	if err := c.SendAck(socket.ServerAckSuccess); err != nil {

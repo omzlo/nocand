@@ -46,17 +46,18 @@ func (nc *NocanNetworkController) ReceiveMessage(nodeId nocan.NodeId) (*nocan.Me
 
 const DEFAULT_EXPECT_TIMEOUT = 3 * time.Second
 
-func (nc *NocanNetworkController) ExpectSystemMessage(nodeId nocan.NodeId, fn nocan.MessageType) (*nocan.Message, error) {
+func (nc *NocanNetworkController) ExpectSystemMessage(node *models.Node, fn nocan.MessageType) (*nocan.Message, error) {
 	ticker := time.NewTicker(DEFAULT_EXPECT_TIMEOUT)
 	defer ticker.Stop()
 
 	select {
-	case msg := <-nc.nodeContexts[nodeId].inputQueue:
+	case msg := <-nc.nodeContexts[node.Id].inputQueue:
 		if msg.IsSystemMessage() {
 			rfn, _ := msg.SystemFunctionParam()
 			if rfn == fn {
 				return msg, nil
 			}
+			node.Touch()
 			return nil, fmt.Errorf("Unexpected system message %s, while expecting %s.", rfn, fn)
 		}
 		return nil, fmt.Errorf("Unexpected publish message, while expecting system message %d.", fn)
@@ -347,7 +348,7 @@ func (nc *NocanNetworkController) handleBusNodeMessage(node *models.Node, msg *n
 			channel.SetContent(msg.Bytes())
 			EventServer.Broadcast(socket.NewChannelUpdateEvent(channel.Name, channel.Id, socket.CHANNEL_UPDATED, msg.Bytes(), channel.UpdatedAt), nil)
 		} else {
-			clog.Warning("Could not unpdate non-existing channel %d for node %d", msg.ChannelId(), msg.NodeId())
+			clog.Warning("Could not update non-existing channel %d for node %d", msg.ChannelId(), msg.NodeId())
 		}
 	}
 }

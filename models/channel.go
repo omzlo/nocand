@@ -3,6 +3,7 @@ package models
 import (
 	"errors"
 	"github.com/omzlo/nocand/models/nocan"
+	"sort"
 	"sync"
 	"time"
 )
@@ -64,6 +65,20 @@ func (cc *ChannelCollection) Each(fn func(*Channel)) {
 
 	for _, v := range cc.ById {
 		fn(v)
+	}
+}
+
+func (cc *ChannelCollection) EachOrdered(fn func(*Channel)) {
+	cc.Mutex.RLock()
+	defer cc.Mutex.RUnlock()
+
+	keys := make([]int, 0)
+	for k, _ := range cc.ById {
+		keys = append(keys, int(k))
+	}
+	sort.Ints(keys)
+	for _, k := range keys {
+		fn(cc.ById[nocan.ChannelId(k)])
 	}
 }
 
