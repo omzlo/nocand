@@ -115,20 +115,20 @@ func (nc *NocanNetworkController) pinger(interval time.Duration) {
 				inactivity := time.Since(node.LastSeen)
 				if inactivity > interval*2 {
 					dequeue = append(dequeue, node)
-				} else if inactivity > interval {
+				} else if inactivity >= interval {
 					nc.SendSystemMessage(node.Id, nocan.SYS_NODE_PING, 0, nil)
 				}
 			}
 		})
 		for _, node := range dequeue {
-			clog.Info("Unregistering node %s due to unresponsiveness.", node)
+			clog.Info("Unregistering node %s due to unresponsiveness. Last seen at %s", node, node.LastSeen)
 			node.State = models.NodeStateUnresponsive
 			EventServer.Broadcast(socket.NewNodeUpdateEventWithParams(node.Id, node.State, node.Udid, node.LastSeen), nil)
 			if !Nodes.Unregister(node) {
 				clog.Error("Failed to unregister node %d.", node.Id)
 			}
 		}
-		time.Sleep(interval)
+		time.Sleep(interval / 3)
 	}
 }
 

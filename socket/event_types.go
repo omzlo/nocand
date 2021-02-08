@@ -853,15 +853,17 @@ func NewNodeFirmwareProgressEvent(id nocan.NodeId) *NodeFirmwareProgressEvent {
 }
 
 func (nfp *NodeFirmwareProgressEvent) Update(progress ProgressReport, transferred uint32) *NodeFirmwareProgressEvent {
-	return &NodeFirmwareProgressEvent{BaseEvent: BaseEvent{0, NodeFirmwareProgressEventId}, NodeId: nfp.NodeId, Progress: progress, BytesTransferred: transferred}
+	nfp.Progress = progress
+	nfp.BytesTransferred = transferred
+	return nfp
 }
 
 func (nfp *NodeFirmwareProgressEvent) MarkAsFailed() *NodeFirmwareProgressEvent {
-	return nfp.Update(ProgressFailed, 0)
+	return nfp.Update(ProgressFailed, nfp.BytesTransferred)
 }
 
 func (nfp *NodeFirmwareProgressEvent) MarkAsSuccess() *NodeFirmwareProgressEvent {
-	return nfp.Update(ProgressSuccess, 0)
+	return nfp.Update(ProgressSuccess, nfp.BytesTransferred)
 }
 
 func (nfp *NodeFirmwareProgressEvent) Pack() ([]byte, error) {
