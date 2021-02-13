@@ -153,7 +153,11 @@ func DecodeEvent(r io.Reader) (Eventer, error) {
 	}
 	// fmt.Printf("%q\n", dbuf[:rlen])
 
-	clog.DebugXX("Got message %d with event %s(%d) and %d bytes of payload", msgId, eventId, eventId, rlen)
+	if msgId != 0 {
+		clog.DebugXX("Got message %d with event %s(%d) and %d bytes of payload", msgId, eventId, eventId, rlen)
+	} else {
+		clog.DebugXX("Got server message with event %s(%d) and %d bytes of payload", eventId, eventId, rlen)
+	}
 
 	var x Eventer
 	switch eventId {

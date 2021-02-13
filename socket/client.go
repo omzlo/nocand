@@ -70,9 +70,10 @@ func (conn *EventConn) dial() error {
 	}
 
 	conn.Conn = sscp_conn
+	conn.MsgId = 1
 
 	event := NewClientHelloEvent(conn.ClientName, HELLO_MAJOR, HELLO_MINOR)
-	event.SetMsgId(1)
+	event.SetMsgId(conn.MsgId)
 
 	if err = EncodeEvent(conn.Conn, event); err != nil {
 		conn.Close()
@@ -216,7 +217,7 @@ func (conn *EventConn) _processNextEvent() error {
 }
 
 func (conn *EventConn) DispatchEvents() error {
-	backoff := 2
+	backoff := 1
 
 	for {
 		/* Reconnect automatically if needed. Auto-redial defines the behaviour */
@@ -227,12 +228,12 @@ func (conn *EventConn) DispatchEvents() error {
 					return err
 				}
 				time.Sleep(time.Duration(backoff) * time.Second)
-				if backoff < 1024 {
+				if backoff < 8 {
 					backoff *= 2
 				}
 				continue
 			}
-			backoff = 2
+			backoff = 1
 		}
 
 		/* Process events */

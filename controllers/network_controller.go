@@ -5,6 +5,7 @@ import (
 	"github.com/omzlo/clog"
 	"github.com/omzlo/nocand/models"
 	"github.com/omzlo/nocand/models/can"
+	"github.com/omzlo/nocand/models/device"
 	"github.com/omzlo/nocand/models/nocan"
 	"github.com/omzlo/nocand/models/rpi"
 	"github.com/omzlo/nocand/socket"
@@ -30,6 +31,7 @@ type NodeContext struct {
 
 type NocanNetworkController struct {
 	nodeContexts [128]NodeContext
+	DeviceInfo   *device.Information
 }
 
 func NewNocanNetworkController() *NocanNetworkController {
@@ -58,11 +60,11 @@ func (nc *NocanNetworkController) ExpectSystemMessage(node *models.Node, fn noca
 				return msg, nil
 			}
 			node.Touch()
-			return nil, fmt.Errorf("Unexpected system message %s, while expecting %s.", rfn, fn)
+			return nil, fmt.Errorf("Unexpected system message %s for node %s, expected %s.", rfn, node, fn)
 		}
-		return nil, fmt.Errorf("Unexpected publish message, while expecting system message %d.", fn)
+		return nil, fmt.Errorf("Unexpected publish message for node %s, while expecting system message %s.", node, fn)
 	case <-ticker.C:
-		return nil, fmt.Errorf("Timeout while waiting for system message %d", fn)
+		return nil, fmt.Errorf("Timeout while waiting for system message %s", fn)
 	}
 }
 
@@ -111,7 +113,7 @@ func (nc *NocanNetworkController) pinger(interval time.Duration) {
 		dequeue = nil
 
 		Nodes.Each(func(node *models.Node) {
-			if node.FirmwareVersion >= 3 {
+			if node.FirmwareVersion >= 3 && node.State == models.NodeStateConnected {
 				inactivity := time.Since(node.LastSeen)
 				if inactivity > interval*2 {
 					dequeue = append(dequeue, node)
@@ -159,29 +161,29 @@ func (nc *NocanNetworkController) Serve() error {
 		nodeId := (frame.CanId >> 21) & 0x7F
 
 		if !frame.IsExtended() {
-			clog.Warning("Expected extended CAN frame, discarding %s.", frame)
+			clog.Warning("Frame %s is not an extended CAN frame, discarding.", frame)
 			continue
 		}
 
 		if frame.Dlc > 8 {
-			clog.Error("Frame DLC is greater than 8, discarding %s.", frame)
+			clog.Error("Frame %s DLC is greater than 8, discarding.", frame)
 			continue
 		}
 
 		if !nc.nodeContexts[nodeId].running { // sending message from an unregistered node?
-			clog.Warning("Got a frame from unknown node %d, dicarding %s.", nodeId, frame)
+			clog.Warning("Got a frame %s from unknown node %d, dicarding.", frame, nodeId)
 			continue
 		}
 
 		if (frame.CanId & nocan.NOCANID_MASK_FIRST) != 0 {
 			if nc.nodeContexts[nodeId].pendingMessage != nil {
-				clog.Warning("Got frame with inconsistent first bit indicator, discarding.")
+				clog.Warning("Got frame %s with inconsistent first bit indicator, discarding.", frame)
 				continue
 			}
 			nc.nodeContexts[nodeId].pendingMessage = nocan.NewMessage(frame.CanId, frame.Data[:frame.Dlc])
 		} else {
 			if nc.nodeContexts[nodeId].pendingMessage == nil {
-				clog.Warning("Got first frame with missing first bit indicator, discarding.")
+				clog.Warning("Got first frame %s with missing first bit indicator, discarding.", frame)
 				continue
 			}
 			nc.nodeContexts[nodeId].pendingMessage.AppendData(frame.Data[:frame.Dlc])

@@ -195,14 +195,14 @@ func clientBusPowerUpdateRequestHandler(c *socket.ClientDescriptor, e socket.Eve
 }
 
 func clientDeviceInformationRequestHandler(c *socket.ClientDescriptor, e socket.Eventer) error {
-	if DeviceInfo == nil {
+	if Bus.DeviceInfo == nil {
 		clog.Warning("Device information is not available.")
 		return c.SendAck(socket.ServerAckGeneralFailure)
 	}
 	if err := c.SendAck(socket.ServerAckSuccess); err != nil {
 		return err
 	}
-	return c.SendEvent(socket.NewDeviceInformationEvent(DeviceInfo))
+	return c.SendEvent(socket.NewDeviceInformationEvent(Bus.DeviceInfo))
 }
 
 func clientSystemPropertiesRequestHandler(c *socket.ClientDescriptor, e socket.Eventer) error {

@@ -2,9 +2,11 @@ package controllers
 
 import (
 	"github.com/omzlo/clog"
-	"github.com/omzlo/nocand/models/device"
 	"github.com/omzlo/nocand/models/rpi"
 	"github.com/omzlo/nocand/socket"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -12,8 +14,6 @@ const (
 	NO_BUS_RESET = false
 	BUS_RESET    = true
 )
-
-var DeviceInfo *device.Information
 
 func MilliAmpEstimation(c uint16) uint {
 	var ma float64
@@ -44,7 +44,7 @@ func (nc *NocanNetworkController) RunPowerMonitor(interval time.Duration) {
 
 func (nc *NocanNetworkController) Initialize(with_reset bool, spi_speed uint) error {
 	di, err := rpi.DriverInitialize(with_reset, spi_speed)
-	DeviceInfo = di
+	nc.DeviceInfo = di
 	return err
 }
 
@@ -68,4 +68,18 @@ func (nci *NocanNetworkController) SetTerminationResistor(set bool) {
 	} else {
 		clog.DebugX("Termination resistor enabled (default).")
 	}
+}
+
+func (nc *NocanNetworkController) AutoPowerOffOnTermination(set bool) {
+	if !set {
+		return
+	}
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-c
+		nc.SetPower(false)
+		clog.Info("Powering the bus down after receiving %s signal from OS.", sig)
+		clog.Terminate(1)
+	}()
 }

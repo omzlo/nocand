@@ -22,6 +22,7 @@ type Configuration struct {
 	NodeCache               *helpers.FilePath `toml:"node-cache"`
 	CheckForUpdates         bool              `toml:"check-for-updates"`
 	TerminationResistor     bool              `toml:"termination-resistor"`
+	SigPowerOff             bool              `toml:"sig-power-off"`
 }
 
 var Settings = Configuration{
@@ -41,6 +42,7 @@ var Settings = Configuration{
 	NodeCache:               DefaultNodeCacheFile,
 	CheckForUpdates:         true,
 	TerminationResistor:     true,
+	SigPowerOff:             false,
 }
 
 var (

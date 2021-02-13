@@ -51,6 +51,7 @@ func ServerFlagSet(cmd string) *flag.FlagSet {
 	fs.UintVar(&config.Settings.PingInterval, "ping-interval", config.Settings.PingInterval, "Node ping interval in milliseconds (defaults to 5000ms, use 0 to disable).")
 	fs.Var(config.Settings.NodeCache, "node-cache", fmt.Sprintf("Node cache file name, defaults to '%s'. Set it to an empty string to disable node caching.", config.DefaultNodeCacheFile))
 	fs.IntVar(&config.Settings.AuthTokenMinimumSize, "auth-token-minium-size", config.Settings.AuthTokenMinimumSize, "Authentication token minimum size in characters (defaults to 24).")
+	fs.BoolVar(&config.Settings.SigPowerOff, "sig-power-off", config.Settings.SigPowerOff, "Power off the CAN-bus if a SIGINT or SIGTERM is received.")
 	return fs
 }
 
@@ -186,6 +187,8 @@ func server_cmd(fs *flag.FlagSet) error {
 	controllers.Bus.RunPowerMonitor(time.Duration(config.Settings.PowerMonitoringInterval) * time.Second)
 
 	controllers.Bus.RunPinger(time.Duration(config.Settings.PingInterval) * time.Millisecond)
+
+	controllers.Bus.AutoPowerOffOnTermination(config.Settings.SigPowerOff)
 
 	return controllers.Bus.Serve()
 }
