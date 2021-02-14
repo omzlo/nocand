@@ -177,6 +177,10 @@ func (s *Server) runClient(c *ClientDescriptor) {
 
 	/* Step 3: Run client sending process. */
 	go func() {
+		/* We use a specific thread to send packets because the go-sccp library is not thread-safe
+		 * Attempting to call sscp.Write from multiple go-routines results in a race condition.
+		 * We could add a mutex in sscp to fix this but it might not bring any benefit.
+		 */
 		defer s.DeleteClient(c)
 		for {
 			select {
