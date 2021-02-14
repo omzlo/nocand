@@ -37,6 +37,6 @@ void setup_wiring_pi(void)
 
 void setup_interrupts()
 {
-    //wiringPiISR(CAN_RX_PIN, INT_EDGE_FALLING, CanRxInterrupt);
+    wiringPiISR(CAN_RX_PIN, INT_EDGE_FALLING, CanRxInterrupt);
     //wiringPiISR(CAN_TX_PIN, INT_EDGE_FALLING, CanTxInterrupt);
 }

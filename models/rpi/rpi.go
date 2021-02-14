@@ -340,23 +340,14 @@ func DriverInitialize(reset bool, speed uint) (*device.Information, error) {
 
 //export CanRxInterrupt
 func CanRxInterrupt() {
-	cnt := 0
-
-	for C.digitalReadRx() != 0 {
-	}
 	for C.digitalReadRx() == 0 {
 		frame, e := DriverRecvCanFrame()
 		if e != nil {
 			clog.Error(e.Error())
 			break
 		}
-		//clog.DebugXX("RECV FRAME %s", frame)
 		CanRxChannel <- *frame
-		cnt++
 	}
-
-	//clog.DebugXX("Got interrupt on RX pin")
-	//clog.Warning("STATS CNT=%d LEN=%d", cnt, len(CanRxChannel))
 }
 
 func init() {
@@ -383,6 +374,8 @@ func init() {
 		}
 	}()
 
+	/* Alternative to CanRxInterrupt */
+	/* ---
 	go func() {
 		for !DriverReady {
 			time.Sleep(10 * time.Millisecond)
@@ -403,4 +396,5 @@ func init() {
 			}
 		}
 	}()
+	*/
 }
