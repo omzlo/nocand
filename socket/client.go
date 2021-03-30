@@ -18,6 +18,11 @@ type EventCallback func(*EventConn, Eventer) error
 
 /****************************************************************************/
 
+type EventRequest struct {
+	ResponseCallback func(*EventConn, error) error
+	CreatedAt        time.Time
+}
+
 // EventConn
 //
 //
@@ -30,36 +35,33 @@ type EventConn struct {
 	AutoRedial         bool
 	MsgId              uint16
 	Callbacks          map[EventId]EventCallback
-	processError       func(*EventConn, error) error
 	processConnect     func(*EventConn) error
 	Mutex              sync.Mutex
-	ResponseChannel    chan (Eventer)
-	inProcessNextEvent bool
+	pendingRequests    map[uint16]*EventRequest
+	terminationChannel chan error
 }
 
-func defaultProcessError(conn *EventConn, err error) error {
-	return err
-}
 func defaultProcessConnect(conn *EventConn) error {
 	return nil
 }
 
 var Terminate = errors.New("Client termination request")
+var TimeoutError = errors.New("Event response timeout")
 
 func NewEventConn(addr string, client_name string, auth string) *EventConn {
 	if addr == "" {
 		addr = ":4242"
 	}
 	return &EventConn{Addr: addr,
-		ClientName:      client_name,
-		AuthToken:       auth,
-		Connected:       false,
-		AutoRedial:      false,
-		MsgId:           1,
-		Callbacks:       make(map[EventId]EventCallback),
-		processError:    defaultProcessError,
-		processConnect:  defaultProcessConnect,
-		ResponseChannel: make(chan (Eventer), 1),
+		ClientName:         client_name,
+		AuthToken:          auth,
+		Connected:          false,
+		AutoRedial:         false,
+		MsgId:              1,
+		Callbacks:          make(map[EventId]EventCallback),
+		processConnect:     defaultProcessConnect,
+		pendingRequests:    make(map[uint16]*EventRequest),
+		terminationChannel: make(chan error, 1),
 	}
 }
 
@@ -98,6 +100,9 @@ func (conn *EventConn) dial() error {
 	}
 
 	conn.Connected = true
+
+	go conn.processEventLoop()
+
 	return conn.processConnect(conn)
 }
 
@@ -117,54 +122,77 @@ func (conn *EventConn) OnConnect(cb func(*EventConn) error) {
 	}
 }
 
-func (conn *EventConn) OnError(cb func(*EventConn, error) error) {
-	if cb == nil {
-		conn.processError = defaultProcessError
-	} else {
-		conn.processError = cb
-	}
-}
+func (conn *EventConn) SendAsync(request Eventer, cb func(*EventConn, error) error) {
+	conn.Mutex.Lock()
+	defer conn.Mutex.Unlock()
 
-func (conn *EventConn) Send(event Eventer) error {
 	if conn.MsgId == 0 {
 		conn.MsgId = 1
 	}
-	event.SetMsgId(conn.MsgId)
+	request.SetMsgId(conn.MsgId)
 
-	if err := EncodeEvent(conn.Conn, event); err != nil {
-		return err
+	conn.pendingRequests[conn.MsgId] = &EventRequest{ResponseCallback: cb, CreatedAt: time.Now()}
+
+	if err := EncodeEvent(conn.Conn, request); err != nil {
+		delete(conn.pendingRequests, request.MsgId())
+		cb(conn, err)
+		return
 	}
 
-	err := conn.processNextEvent()
-	if err != nil {
-		return err
+	conn.MsgId++
+}
+
+func (conn *EventConn) Send(request Eventer) error {
+	//responder := make(chan error, 1)
+	msg_id := request.MsgId()
+
+	conn.SendAsync(request, func(econn *EventConn, ee error) error {
+		//responder <- ee
+		//return nil
+		return ee
+	})
+	for {
+		e_id, err := conn.processNextEvent()
+		if e_id == msg_id || err != nil {
+			return err
+		}
+	}
+	//err := <-responder
+	//return err
+}
+
+func (conn *EventConn) WaitTermination(duration time.Duration) error {
+	if duration == 0 {
+		err := <-conn.terminationChannel
+		if err != Terminate {
+			return err
+		}
+		return nil
 	}
 
-	timeout := time.NewTimer(3 * time.Second)
+	timeout := time.NewTimer(duration)
 
 	select {
-	case response := <-conn.ResponseChannel:
+	case response := <-conn.terminationChannel:
 		if !timeout.Stop() {
 			<-timeout.C
 		}
-		ack, ok := response.(*ServerAckEvent)
-		if !ok {
-			return fmt.Errorf("Expectected ServerAckEvent, got %s", response.Id())
+		if response != Terminate {
+			return response
 		}
-
-		if response.MsgId() != event.MsgId() {
-			return fmt.Errorf("MsgId mismatch is reponse to request %s (request MsgId: %d, response MsgId: %d)", event.Id(), event.MsgId(), response.MsgId())
-		}
-
-		conn.MsgId++
-
-		return ack.ToError()
+		return nil
 	case <-timeout.C:
-		return ErrorServerAckTimeout
+		return TimeoutError
 	}
 }
 
+func (conn *EventConn) Terminate() error {
+	conn.AutoRedial = false
+	return conn.Close()
+}
+
 func (conn *EventConn) Close() error {
+	// TODO: clean pending requests
 	clog.DebugXX("Closing connection to %s", conn.Conn.RemoteAddr())
 	conn.Connected = false
 	return conn.Conn.Close()
@@ -179,53 +207,79 @@ func (conn *EventConn) EnableAutoRedial() *EventConn {
 	return conn
 }
 
-func (conn *EventConn) processNextEvent() error {
-	// TODO: check if we need atomic change to inProcessNextEvent
-
-	if !conn.inProcessNextEvent {
-		conn.inProcessNextEvent = true
-		err := conn._processNextEvent()
-		conn.inProcessNextEvent = false
-		return err
+/*
+func (conn *EventConn) cancelRequest(request Eventer) {
+	er := conn.pendingRequests[request.MsgId()]
+	if er != nil {
 	}
-	return nil
 }
+*/
 
-func (conn *EventConn) _processNextEvent() error {
-	for {
-		event, err := DecodeEvent(conn.Conn)
-		if err != nil {
-			conn.Close()
-			return err
-		}
+func (conn *EventConn) processNextEvent() (uint16, error) {
+	event, err := DecodeEvent(conn.Conn)
+	if err != nil {
+		return 0, err
+	}
 
-		if event.MsgId() == 0 {
-			cb := conn.Callbacks[event.Id()]
-			if cb != nil {
-				err := cb(conn, event)
-				if err != nil {
-					if err := conn.processError(conn, err); err != nil {
-						return err
-					}
-				}
+	msg_id := event.MsgId()
+
+	if msg_id == 0 {
+		cb := conn.Callbacks[event.Id()]
+		if cb != nil {
+			err := cb(conn, event)
+			if err != nil {
+				return 0, err
 			}
-		} else {
-			conn.ResponseChannel <- event
-			return nil
+		}
+		return 0, nil
+	}
+
+	conn.Mutex.Lock()
+	er := conn.pendingRequests[msg_id]
+	if er != nil {
+		delete(conn.pendingRequests, msg_id)
+	}
+	conn.Mutex.Unlock()
+
+	if er == nil {
+		return msg_id, fmt.Errorf("Unexpected sequence number %d in response event", msg_id)
+	}
+	if err := er.ResponseCallback(conn, nil); err != nil {
+		return msg_id, err
+	}
+
+	conn.Mutex.Lock()
+	var expired_id uint16 = 0
+	var expired_er *EventRequest = nil
+	for event_id, er := range conn.pendingRequests {
+		if time.Since(er.CreatedAt) > 3*time.Second {
+			delete(conn.pendingRequests, event_id)
+			expired_er = er
+			expired_id = event_id
+			break
 		}
 	}
+	conn.Mutex.Unlock()
+
+	if expired_er != nil {
+		if err := er.ResponseCallback(conn, TimeoutError); err != nil {
+			return expired_id, err
+		}
+	}
+	return 0, nil
 }
 
-func (conn *EventConn) DispatchEvents() error {
+func (conn *EventConn) processEventLoop() {
+	var err error
 	backoff := 1
 
 	for {
 		/* Reconnect automatically if needed. Auto-redial defines the behaviour */
 		if !conn.Connected {
-			err := conn.dial()
+			err = conn.dial()
 			if err != nil {
 				if !conn.AutoRedial {
-					return err
+					break
 				}
 				time.Sleep(time.Duration(backoff) * time.Second)
 				if backoff < 8 {
@@ -237,17 +291,29 @@ func (conn *EventConn) DispatchEvents() error {
 		}
 
 		/* Process events */
-		err := conn.processNextEvent()
+		_, err = conn.processNextEvent()
 		if err != nil {
-			clog.DebugXX("Event processing returned: %s", err)
 			conn.Close()
 			if err == Terminate {
-				return nil
+				break
 			}
 			if !conn.AutoRedial {
-				return err
+				break
 			}
 			continue
 		}
 	}
+	clog.Debug("Ended event loop")
+	conn.terminationChannel <- err
+}
+
+func ReturnErrorOrContinue(c *EventConn, e error) error {
+	return e
+}
+
+func ReturnErrorOrTerminate(c *EventConn, e error) error {
+	if e == nil {
+		return Terminate
+	}
+	return e
 }

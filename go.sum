@@ -1,0 +1,6 @@
+github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ=
+github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
+github.com/omzlo/clog v0.0.0-20200929154205-ef979337c74c h1:2RJDsYnW3OVy3E39OD1pfC+Oqj87hcrES9V1FR4kTvw=
+github.com/omzlo/clog v0.0.0-20200929154205-ef979337c74c/go.mod h1:W+4R8jwC2OSLD0DquHbXrv8TYjqh0YhCVXCNw5ChL6s=
+github.com/omzlo/go-sscp v0.0.0-20210205211644-9300fad1816f h1:wl7GQvqXihtBR6a5aYvH+yepnc7p5YRR3fgpdpzgtaA=
+github.com/omzlo/go-sscp v0.0.0-20210205211644-9300fad1816f/go.mod h1:X8QRC0y4w0ngNO9N7w3pM4f3+bOz/ES094oAIsFdkFU=

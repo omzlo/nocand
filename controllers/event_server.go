@@ -67,6 +67,7 @@ func clientChannelUpdateHandler(c *socket.ClientDescriptor, e socket.Eventer) er
 			Bus.Publish(0, channel.Id, cu.Value)
 			clog.DebugXX("Broadcasting channel update on %s: %q", cu.ChannelName, cu.Value)
 			EventServer.Broadcast(socket.NewChannelUpdateEvent(channel.Name, channel.Id, socket.CHANNEL_UPDATED, cu.Value, cu.UpdatedAt), c)
+			clog.DebugXX("Sending ack for channel update on %s: %q", cu.ChannelName, cu.Value)
 			return c.SendAck(socket.ServerAckSuccess)
 		}
 		if cu.Status == socket.CHANNEL_DESTROYED {

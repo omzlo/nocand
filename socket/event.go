@@ -98,7 +98,7 @@ func EncodeEvent(w io.Writer, e Eventer) error {
 	dest = append(dest, packLength(uint(len(pv)))...)
 	dest = append(dest, pv...)
 
-	// fmt.Printf(">>> Sending %q\n", dest)
+	//clog.DebugXX(">>> Sending [%d] %s\n", e.MsgId(), e)
 
 	_, err = w.Write(dest)
 	if err != nil {
@@ -116,8 +116,6 @@ func DecodeEvent(r io.Reader) (Eventer, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// fmt.Printf(">>> Receiving %q ", rbuf[:])
 
 	msgId := (uint16(rbuf[0]) << 8) | uint16(rbuf[1])
 	eventId := EventId(rbuf[2])
@@ -217,5 +215,6 @@ func DecodeEvent(r io.Reader) (Eventer, error) {
 		return nil, err
 	}
 
+	//clog.DebugXX("<<< Receiving [%d] %s\n", x.MsgId(), x)
 	return x, nil
 }

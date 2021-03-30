@@ -6,6 +6,7 @@ import (
 	"github.com/omzlo/go-sscp"
 	"io"
 	"sync"
+	"time"
 )
 
 /****************************************************************************/
@@ -201,6 +202,7 @@ func (s *Server) runClient(c *ClientDescriptor) {
 	/* Step 4: Run client receiving process. */
 	for {
 		event, err := DecodeEvent(c.Conn)
+		now := time.Now()
 
 		if err != nil {
 			if err != io.EOF {
@@ -211,7 +213,7 @@ func (s *Server) runClient(c *ClientDescriptor) {
 			break
 		}
 
-		clog.DebugX("Processing event %s(%d) from client %s", event.Id(), event.Id(), c.Name())
+		clog.DebugX("Processing event %s(%d) from client %s with seq_num %d", event.Id(), event.Id(), c.Name(), event.MsgId())
 
 		if event.MsgId() != 0 {
 			c.LastMsgId++
@@ -232,6 +234,7 @@ func (s *Server) runClient(c *ClientDescriptor) {
 				// SendAck is performed by handler() here
 				break
 			}
+			clog.DebugX("Handled event %s(%d) from client %s with seq_num %d in %s", event.Id(), event.Id(), c.Name(), event.MsgId(), time.Since(now))
 		} else {
 			clog.Warning("No handler found for event id %d", event.Id())
 			c.LastMsgId++ // blindly assume this

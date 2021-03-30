@@ -158,6 +158,8 @@ func (nc *NocanNetworkController) Serve() error {
 	for {
 		frame := <-rpi.CanRxChannel
 
+		clog.DebugXX("RECV FRAME %s", frame)
+
 		nodeId := (frame.CanId >> 21) & 0x7F
 
 		if !frame.IsExtended() {
