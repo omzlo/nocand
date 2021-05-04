@@ -39,6 +39,7 @@ type EventConn struct {
 	Mutex              sync.Mutex
 	pendingRequests    map[uint16]*EventRequest
 	terminationChannel chan error
+	eventChannel       chan Eventer
 	dialCount          int
 }
 
@@ -63,6 +64,7 @@ func NewEventConn(addr string, client_name string, auth string) *EventConn {
 		processConnect:     defaultProcessConnect,
 		pendingRequests:    make(map[uint16]*EventRequest),
 		terminationChannel: make(chan error, 1),
+		eventChannel:       make(chan Eventer, 32),
 		dialCount:          0,
 	}
 }
@@ -102,8 +104,10 @@ func (conn *EventConn) dial() error {
 	}
 
 	conn.Connected = true
-	conn.dialCount++
 
+	go conn.readEventLoop()
+
+	conn.dialCount++
 	if conn.dialCount == 1 {
 		go conn.processEventLoop()
 	}
@@ -220,10 +224,20 @@ func (conn *EventConn) cancelRequest(request Eventer) {
 }
 */
 
+func (conn *EventConn) readEventLoop() {
+	for {
+		event, err := DecodeEvent(conn.Conn)
+		if err != nil {
+			return
+		}
+		conn.eventChannel <- event
+	}
+}
+
 func (conn *EventConn) processNextEvent() (uint16, error) {
-	event, err := DecodeEvent(conn.Conn)
-	if err != nil {
-		return 0, err
+	event, more := <-conn.eventChannel
+	if !more {
+		return 0, nil
 	}
 
 	msg_id := event.MsgId()
