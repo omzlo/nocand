@@ -39,6 +39,7 @@ type EventConn struct {
 	Mutex              sync.Mutex
 	pendingRequests    map[uint16]*EventRequest
 	terminationChannel chan error
+	dialCount          int
 }
 
 func defaultProcessConnect(conn *EventConn) error {
@@ -62,6 +63,7 @@ func NewEventConn(addr string, client_name string, auth string) *EventConn {
 		processConnect:     defaultProcessConnect,
 		pendingRequests:    make(map[uint16]*EventRequest),
 		terminationChannel: make(chan error, 1),
+		dialCount:          0,
 	}
 }
 
@@ -100,8 +102,11 @@ func (conn *EventConn) dial() error {
 	}
 
 	conn.Connected = true
+	conn.dialCount++
 
-	go conn.processEventLoop()
+	if conn.dialCount == 1 {
+		go conn.processEventLoop()
+	}
 
 	return conn.processConnect(conn)
 }

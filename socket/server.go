@@ -199,7 +199,9 @@ func (s *Server) runClient(c *ClientDescriptor) {
 		}
 	}()
 
-	/* Step 4: Run client receiving process. */
+	/* Step 4: Run client receiving process.
+	 * This is also performed in a single thread.
+	 */
 	for {
 		event, err := DecodeEvent(c.Conn)
 		now := time.Now()
