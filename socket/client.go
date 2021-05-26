@@ -38,10 +38,29 @@ type EventConn struct {
 	processConnect     func(*EventConn) error
 	Mutex              sync.Mutex
 	pendingRequests    map[uint16]*EventRequest
+	endOfReadChannel   chan error
 	terminationChannel chan error
 	eventChannel       chan Eventer
 	dialCount          int
 }
+
+/* Some key logic in EventConn:
+
+1) There is only one goroutine that reads messages from an EventConn.
+   - This is either the dial() function or the conn.readEventLoop() goroutine called from dial()
+   - dial() may be called several times if auto-redial is enabled.
+   - However, there is always a call to Close() between calls to dial()
+   - Close() always waits for conn.readEventLoop() to end.
+   - Hence there are never 2 conn.readEventLoop() goroutines running in parallel.
+
+2) There is only one goroutine that can writes messages to an EventConn at a time.
+   - dial() and SendAsync() are the only functions that write to an EventConn.
+   - SendAsync() uses a mutex to avoid concurrent writes to a conn
+   - SendAsync() does not allow writes when conn.Connect is false
+   - dial() will perform a write when conn.Connect is false
+   - Hence dial() and SendAsync() do not overlap
+
+*/
 
 func defaultProcessConnect(conn *EventConn) error {
 	return nil
@@ -63,6 +82,7 @@ func NewEventConn(addr string, client_name string, auth string) *EventConn {
 		Callbacks:          make(map[EventId]EventCallback),
 		processConnect:     defaultProcessConnect,
 		pendingRequests:    make(map[uint16]*EventRequest),
+		endOfReadChannel:   make(chan error, 1),
 		terminationChannel: make(chan error, 1),
 		eventChannel:       make(chan Eventer, 32),
 		dialCount:          0,
@@ -112,6 +132,7 @@ func (conn *EventConn) dial() error {
 		go conn.processEventLoop()
 	}
 
+	clog.Debug("Opened connection %d to %s from %s", conn.dialCount, conn.Conn.RemoteAddr(), conn.Conn.LocalAddr())
 	return conn.processConnect(conn)
 }
 
@@ -135,6 +156,12 @@ func (conn *EventConn) SendAsync(request Eventer, cb func(*EventConn, error) err
 	conn.Mutex.Lock()
 	defer conn.Mutex.Unlock()
 
+	if !conn.Connected {
+		err := errors.New("Sending event on a closed connection.")
+		cb(conn, err)
+		return
+	}
+
 	if conn.MsgId == 0 {
 		conn.MsgId = 1
 	}
@@ -152,22 +179,18 @@ func (conn *EventConn) SendAsync(request Eventer, cb func(*EventConn, error) err
 }
 
 func (conn *EventConn) Send(request Eventer) error {
-	//responder := make(chan error, 1)
 	msg_id := request.MsgId()
 
 	conn.SendAsync(request, func(econn *EventConn, ee error) error {
-		//responder <- ee
-		//return nil
 		return ee
 	})
+
 	for {
 		e_id, err := conn.processNextEvent()
 		if e_id == msg_id || err != nil {
 			return err
 		}
 	}
-	//err := <-responder
-	//return err
 }
 
 func (conn *EventConn) WaitTermination(duration time.Duration) error {
@@ -202,9 +225,18 @@ func (conn *EventConn) Terminate() error {
 
 func (conn *EventConn) Close() error {
 	// TODO: clean pending requests
-	clog.DebugXX("Closing connection to %s", conn.Conn.RemoteAddr())
+	//clog.DebugXX("Closing connection %d to %s", conn.dialCount, conn.Conn.RemoteAddr())
 	conn.Connected = false
-	return conn.Conn.Close()
+	conn.Conn.Close()
+	// Wait for read-side close
+	select {
+	case res := <-conn.endOfReadChannel:
+		clog.Debug("Closed connection %d to %s: %s", conn.dialCount, conn.Conn.RemoteAddr(), res)
+		return res
+	case <-time.After(5 * time.Second):
+		clog.Error("Stalled while waiting for connection %d to close on read side. Please report this error.", conn.dialCount)
+		return fmt.Errorf("Stalled while waiting for connection to close on the read side")
+	}
 }
 
 func (conn *EventConn) Connect() error {
@@ -228,6 +260,7 @@ func (conn *EventConn) readEventLoop() {
 	for {
 		event, err := DecodeEvent(conn.Conn)
 		if err != nil {
+			conn.endOfReadChannel <- err
 			return
 		}
 		conn.eventChannel <- event
